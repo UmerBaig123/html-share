@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Platform-Key LLM Calls That Don't Charge the Wallet</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel-2: #1d2129;
+        --border: #2a2f3a;
+        --text: #e6e9ef;
+        --muted: #9aa3b2;
+        --accent: #6ea8fe;
+        --green: #34d399;
+        --amber: #fbbf24;
+        --red: #f87171;
+        --chip-bg: #232834;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(180deg, #0f1115 0%, #0c0e12 100%);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        line-height: 1.55;
+        font-size: 15px;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+
+      header.hero {
+        border: 1px solid var(--border);
+        background:
+          radial-gradient(
+            1200px 400px at 0% -20%,
+            rgba(110, 168, 254, 0.12),
+            transparent 60%
+          ),
+          var(--panel);
+        border-radius: 16px;
+        padding: 32px 32px 28px;
+        margin-bottom: 28px;
+      }
+      header.hero h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        letter-spacing: -0.02em;
+      }
+      header.hero p.sub {
+        margin: 0;
+        color: var(--muted);
+        max-width: 70ch;
+      }
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .pill {
+        font-size: 12.5px;
+        color: var(--muted);
+        background: var(--chip-bg);
+        border: 1px solid var(--border);
+        padding: 5px 11px;
+        border-radius: 999px;
+      }
+      .pill strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      section {
+        margin-top: 36px;
+      }
+      h2 {
+        font-size: 18px;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      h2 .num {
+        font-size: 13px;
+        color: var(--accent);
+        border: 1px solid var(--border);
+        background: var(--chip-bg);
+        border-radius: 8px;
+        padding: 2px 8px;
+      }
+
+      .callout {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-left: 3px solid var(--accent);
+        border-radius: 10px;
+        padding: 16px 18px;
+        color: var(--muted);
+      }
+      .callout.green {
+        border-left-color: var(--green);
+      }
+      .callout.amber {
+        border-left-color: var(--amber);
+      }
+      .callout strong {
+        color: var(--text);
+      }
+
+      ul.crit {
+        list-style: none;
+        padding: 0;
+        margin: 14px 0 0;
+      }
+      ul.crit li {
+        padding: 10px 14px;
+        margin-bottom: 8px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      ul.crit li b {
+        color: var(--green);
+      }
+
+      .table-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      thead th {
+        text-align: left;
+        font-weight: 600;
+        color: var(--muted);
+        background: var(--panel-2);
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        font-size: 12.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      tbody td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      tbody tr:hover {
+        background: rgba(255, 255, 255, 0.015);
+      }
+      td.num {
+        color: var(--muted);
+        width: 34px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      code,
+      .mono {
+        font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        font-size: 12.8px;
+      }
+      td.file code {
+        color: var(--accent);
+        word-break: break-all;
+      }
+      .env {
+        color: var(--amber);
+        white-space: nowrap;
+      }
+
+      .tag {
+        display: inline-block;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+        border: 1px solid transparent;
+      }
+      .tag.free {
+        color: var(--green);
+        background: rgba(52, 211, 153, 0.1);
+        border-color: rgba(52, 211, 153, 0.25);
+      }
+      .tag.shadow {
+        color: var(--amber);
+        background: rgba(251, 191, 36, 0.1);
+        border-color: rgba(251, 191, 36, 0.25);
+      }
+      .tag.billed {
+        color: var(--red);
+        background: rgba(248, 113, 113, 0.1);
+        border-color: rgba(248, 113, 113, 0.25);
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      @media (min-width: 760px) {
+        .two-col {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .mini {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 16px 18px;
+      }
+      .mini h3 {
+        margin: 0 0 10px;
+        font-size: 14.5px;
+      }
+      .mini h3 .tag {
+        margin-left: 6px;
+      }
+      .mini ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+      .mini ul li {
+        margin-bottom: 6px;
+      }
+      .mini ul li code {
+        color: var(--accent);
+      }
+
+      footer {
+        margin-top: 48px;
+        color: var(--muted);
+        font-size: 12.5px;
+        text-align: center;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <h1>Platform-Key LLM Calls That Do <em>Not</em> Charge the Wallet</h1>
+        <p class="sub">
+          Every LLM call site that picks its API key from the platform
+          <code>.env</code> (<span class="mono">process.env</span> /
+          <span class="mono">serverEnv</span>) <strong>and</strong> never
+          deducts from any wallet. These are the calls the platform pays for
+          directly, with zero wallet recovery.
+        </p>
+        <div class="meta-row">
+          <span class="pill"><strong>12</strong>&nbsp;unbilled call sites</span>
+          <span class="pill"
+            >Companion to <strong>llm-billing-audit.md</strong></span
+          >
+          <span class="pill">Verified&nbsp;<strong>2026-06-01</strong></span>
+          <span class="pill">Repo:&nbsp;<strong>AgentKong_App</strong></span>
+        </div>
+      </header>
+
+      <section>
+        <h2><span class="num">A</span> Inclusion criteria</h2>
+        <p style="color: var(--muted); margin: 0 0 6px">
+          A call site appears here only if <strong>both</strong> are true:
+        </p>
+        <ul class="crit">
+          <li>
+            <b>1 · Key source = platform</b> — instantiated with
+            <code class="mono">process.env.*_API_KEY</code> or
+            <code class="mono">serverEnv.*_API_KEY</code>, <em>not</em> a
+            business/agency key resolved via
+            <code class="mono">openai-key-resolver.ts</code> /
+            <code class="mono">openai-key.service.ts</code>.
+          </li>
+          <li>
+            <b>2 · No wallet charge</b> — the path never calls
+            <code class="mono">deductCredit</code>,
+            <code class="mono">deductBalance</code>, or
+            <code class="mono">agentMessageCharge</code>.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span class="num">B</span> The list &mdash; 12 call sites</h2>
+        <div class="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th class="num">#</th>
+                <th>Purpose</th>
+                <th>File</th>
+                <th>Provider</th>
+                <th>Env key</th>
+                <th>Billing status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">1</td>
+                <td>Video insight summary</td>
+                <td class="file">
+                  <code>src/lib/youtube/insight-worker.ts</code>
+                </td>
+                <td>Anthropic <span class="mono">claude-haiku-4-5</span></td>
+                <td><span class="env">ANTHROPIC_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; no tracking
+                </td>
+              </tr>
+              <tr>
+                <td class="num">2</td>
+                <td>Lead AI triage</td>
+                <td class="file">
+                  <code>src/server/services/ai-triage.service.ts</code>
+                </td>
+                <td>Gemini <span class="mono">gemini-3-flash-preview</span></td>
+                <td><span class="env">GOOGLE_AI_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; no tracking
+                </td>
+              </tr>
+              <tr>
+                <td class="num">3</td>
+                <td>Support chat</td>
+                <td class="file">
+                  <code>src/server/services/support-chat.service.ts</code>
+                </td>
+                <td>
+                  Gemini
+                  <span class="mono"
+                    >gemini-3-flash-preview / 3.1-flash-lite</span
+                  >
+                </td>
+                <td><span class="env">GOOGLE_AI_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; no tracking
+                </td>
+              </tr>
+              <tr>
+                <td class="num">4</td>
+                <td>Ad image generation</td>
+                <td class="file">
+                  <code>src/lib/creative-analysis/image-generator.ts</code>
+                </td>
+                <td>
+                  OpenAI DALL&middot;E <span class="mono">images.generate</span>
+                </td>
+                <td><span class="env">OPENAI_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; returns
+                  <code>totalCost</code>, never deducts
+                </td>
+              </tr>
+              <tr>
+                <td class="num">5</td>
+                <td>Niche inference</td>
+                <td class="file">
+                  <code
+                    >src/lib/creative-analysis/foreplay-config-inferrer.ts</code
+                  >
+                </td>
+                <td>Gemini <span class="mono">gemini-3.5-flash</span></td>
+                <td><span class="env">GOOGLE_AI_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; no tracking
+                </td>
+              </tr>
+              <tr>
+                <td class="num">6</td>
+                <td>Ad scoring</td>
+                <td class="file">
+                  <code>src/lib/creative-analysis/foreplay-scorer.ts</code>
+                </td>
+                <td>Gemini <span class="mono">gemini-3.5-flash</span></td>
+                <td><span class="env">GOOGLE_AI_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; no tracking
+                </td>
+              </tr>
+              <tr>
+                <td class="num">7</td>
+                <td>Model benchmarking</td>
+                <td class="file">
+                  <code
+                    >src/lib/creative-analysis/gemini-analyzer-benchmark.ts</code
+                  >
+                </td>
+                <td>Gemini</td>
+                <td><span class="env">GOOGLE_AI_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; benchmark /
+                  dev tool
+                </td>
+              </tr>
+              <tr>
+                <td class="num">8</td>
+                <td>Creative analysis</td>
+                <td class="file">
+                  <code>src/lib/creative-analysis/gemini-analyzer.ts</code>
+                </td>
+                <td>Gemini <span class="mono">gemini-3.5-flash</span></td>
+                <td><span class="env">GOOGLE_AI_API_KEY</span></td>
+                <td><span class="tag shadow">Shadow-log only</span></td>
+              </tr>
+              <tr>
+                <td class="num">9</td>
+                <td>Performance analysis</td>
+                <td class="file">
+                  <code>src/lib/creative-analysis/performance-analyzer.ts</code>
+                </td>
+                <td>Anthropic / OpenAI / Gemini</td>
+                <td><span class="env">ANTHROPIC / OPENAI / GOOGLE_AI</span></td>
+                <td><span class="tag shadow">Shadow-log only</span></td>
+              </tr>
+              <tr>
+                <td class="num">10</td>
+                <td>Thesis generation</td>
+                <td class="file">
+                  <code>src/lib/creative-analysis/thesis-generator.ts</code>
+                </td>
+                <td>Anthropic / OpenAI / Gemini</td>
+                <td><span class="env">ANTHROPIC / OPENAI / GOOGLE_AI</span></td>
+                <td><span class="tag shadow">Shadow-log only</span></td>
+              </tr>
+              <tr>
+                <td class="num">11</td>
+                <td>Hook synthesis</td>
+                <td class="file">
+                  <code>src/lib/fathom/marketing-quote-synthesis.ts</code>
+                </td>
+                <td>Gemini <span class="mono">gemini-2.5-flash</span></td>
+                <td><span class="env">GOOGLE_AI_API_KEY</span></td>
+                <td><span class="tag shadow">Shadow-log only</span></td>
+              </tr>
+              <tr>
+                <td class="num">12</td>
+                <td>Insight consolidation</td>
+                <td class="file">
+                  <code>src/lib/fathom/insight-consolidation.ts</code>
+                </td>
+                <td>Anthropic <span class="mono">claude-opus-4-7</span></td>
+                <td><span class="env">ANTHROPIC_API_KEY</span></td>
+                <td>
+                  <span class="tag free">No charge</span> &middot; no usage
+                  capture
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout amber" style="margin-top: 16px">
+          <strong>Shadow billing (items 8&ndash;11):</strong> these compute a
+          cost via <code class="mono">calculateModelCost</code> and log it with
+          a <code class="mono">[BILLING-SHADOW]</code> prefix, but
+          <strong>never deduct from a wallet</strong>. They are
+          instrumented-but-free.
+        </div>
+      </section>
+
+      <section>
+        <h2>
+          <span class="num">C</span> Explicitly NOT in this list &mdash; and why
+        </h2>
+        <div class="two-col">
+          <div class="mini">
+            <h3>
+              Platform key, but it <span class="tag billed">DOES charge</span>
+            </h3>
+            <ul>
+              <li>
+                <code>src/lib/fathom/insight-dedup-processor.ts</code> &mdash;
+                Anthropic (<span class="env">ANTHROPIC_API_KEY</span>) &rarr;
+                <code class="mono">deductCredit(SALES_INSIGHT_PROCESSING)</code>
+              </li>
+              <li>
+                <code>src/server/services/research-agent.ts</code> +
+                <code>perplexity-client.ts</code> &mdash; Perplexity (<span
+                  class="env"
+                  >PERPLEXITY_API_KEY</span
+                >) &rarr;
+                <code class="mono">deductCredit(RESEARCH_AGENT)</code> (first
+                run free)
+              </li>
+            </ul>
+          </div>
+          <div class="mini">
+            <h3>
+              No charge, but uses the
+              <span class="tag free">customer's own key</span>
+            </h3>
+            <ul style="margin-bottom: 8px">
+              Resolver chain is business key &rarr; agency key with no
+              <code class="mono">.env</code>
+              fallback (<code class="mono">openai-key-resolver.ts</code
+              >,
+              <code class="mono">openai-key.service.ts</code
+              >). The customer's provider key pays, not the platform.
+            </ul>
+            <ul>
+              <li><code>src/app/api/chat/route.ts</code> (main agent chat)</li>
+              <li>
+                <code>src/server/services/contact-ai-summary.service.ts</code>
+              </li>
+              <li>
+                <code>src/server/services/feedback-synthesizer.service.ts</code>
+              </li>
+              <li>
+                <code>src/server/api/routers/business-brief.router.ts</code>
+              </li>
+              <li>
+                <code>src/actions/openai.ts</code>,
+                <code>openai-rate-limit.ts</code>
+              </li>
+              <li>
+                <code>src/app/api/generate-title/route.ts</code>,
+                <code>generate-output-flows/route.ts</code>,
+                <code>openai/probe-rate-limit/route.ts</code>
+              </li>
+              <li>
+                <code>src/lib/pinecone.ts</code>
+                <code class="mono">generateEmbedding()</code> (key passed in by
+                caller)
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        Generated from a verified codebase sweep &middot; AgentKong_App &middot;
+        2026-06-01
+      </footer>
+    </div>
+  </body>
+</html>
