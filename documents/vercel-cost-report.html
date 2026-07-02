@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vercel Cost Diagnosis &amp; Optimization Plan — AgentKong</title>
+<title>Vercel Cost Diagnosis &amp; Optimization Plan · AgentKong</title>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <style>
   :root {
@@ -50,6 +50,15 @@
   nav a:hover { color: var(--text); }
   nav .spacer { flex: 1; }
   nav .date { font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  nav .btn-dl {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    background: var(--accent); color: #fff !important;
+    font-size: 12.5px; font-weight: 600;
+    padding: 6px 13px; border-radius: 7px;
+    transition: background .12s ease;
+  }
+  nav .btn-dl:hover { background: #2449d1; color: #fff; }
+  nav .btn-dl svg { color: #fff; }
   /* ---------- layout ---------- */
   main { max-width: 1080px; margin: 0 auto; padding: 48px 32px 96px; }
   section { margin-bottom: 72px; }
@@ -153,10 +162,27 @@
   .decision-item .rec { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--green); margin-top: 5px; }
   /* ---------- viz containers ---------- */
   .viz { width: 100%; }
-  .viz svg { display: block; width: 100%; height: auto; }
+  .viz svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .viz .hit { cursor: pointer; }
   .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12.5px; color: var(--text-2); }
   .legend .item { display: flex; align-items: center; gap: 6px; }
   .legend .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .viz-hint { font-size: 11.5px; color: var(--text-3); margin-top: 8px; user-select: none; }
+  /* ---------- chart tooltip ---------- */
+  #chart-tip {
+    position: fixed; z-index: 100; pointer-events: none;
+    background: #101828; color: #e4e7ec;
+    border-radius: 8px; padding: 9px 12px;
+    font-size: 12px; line-height: 1.5; max-width: 280px;
+    box-shadow: 0 8px 24px rgba(16,24,40,0.28);
+    opacity: 0; transform: translateY(4px);
+    transition: opacity .12s ease, transform .12s ease;
+  }
+  #chart-tip.on { opacity: 1; transform: translateY(0); }
+  #chart-tip .tip-title { font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 3px; }
+  #chart-tip .tip-row { display: flex; justify-content: space-between; gap: 16px; white-space: nowrap; }
+  #chart-tip .tip-row .v { font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; }
+  #chart-tip .tip-note { color: #98a2b3; font-size: 11px; margin-top: 3px; }
   /* ---------- footer ---------- */
   footer { border-top: 1px solid var(--border); background: var(--surface); padding: 40px 32px; }
   footer .inner { max-width: 1080px; margin: 0 auto; }
@@ -200,6 +226,7 @@
     <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
     <symbol id="i-effort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></symbol>
     <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
   </defs>
 </svg>
 
@@ -214,23 +241,27 @@
   <a href="#decisions">Decisions</a>
   <span class="spacer"></span>
   <span class="date">July 2, 2026 · billing data covers ~first half of the month</span>
+  <a class="btn-dl" href="vercel-cost-optimization-sprint.md" download="vercel-cost-optimization-sprint.md">
+    <svg width="13" height="13"><use href="#i-download"/></svg>
+    Download sprint
+  </a>
 </nav>
 
 <main>
 
 <!-- ================================================================ -->
-<!-- SECTION 1 — OVERVIEW                                             -->
+<!-- SECTION 1: OVERVIEW                                              -->
 <!-- ================================================================ -->
 <section id="overview">
   <div class="section-head">
-    <div class="kicker">Section 1 — Diagnosis</div>
+    <div class="kicker">Section 1 · Diagnosis</div>
     <h1>What is costing the money</h1>
     <p class="lede">
       The team is on pace for roughly <strong>$2,000/month</strong>. The invoice line items below were pulled by the team
       (<span class="badge verified"><svg><use href="#i-check"/></svg>verified</span> from the Vercel usage dashboard) and cover only about
       <strong>two weeks</strong> of the current cycle, so monthly figures shown here are a 2&times; extrapolation
       (<span class="badge estimated"><svg><use href="#i-info"/></svg>estimated</span>). The dominant cost is <strong>function compute
-      duration</strong> — driven almost entirely by the tracking widget embedded on ~40 customer domains, not by preview deployments.
+      duration</strong>, driven almost entirely by the tracking widget embedded on ~40 customer domains, not by preview deployments.
     </p>
   </div>
 
@@ -260,12 +291,12 @@
   <div class="chart-row">
     <div class="card chart-card">
       <h3>Cost breakdown <span class="badge estimated"><svg><use href="#i-info"/></svg>monthly run-rate</span></h3>
-      <div class="caption">Extrapolated to a full month from the ~2-week verified line items.</div>
+      <div class="caption">Extrapolated to a full month from the ~2-week verified line items. Hover a segment or legend row for detail.</div>
       <div class="viz" id="donut-chart"></div>
     </div>
     <div class="card chart-card">
       <h3>Where the ~160M requests come from <span class="badge estimated"><svg><use href="#i-info"/></svg>estimated mix</span></h3>
-      <div class="caption">Allocation of monthly request volume by endpoint class, modeled from code behavior and invoice math.</div>
+      <div class="caption">Allocation of monthly request volume by endpoint class, modeled from code behavior and invoice math. Hover a bar for its share.</div>
       <div class="viz" id="request-chart"></div>
       <div class="footnote">Every request is one Edge Request; most also invoke a Node.js function whose wall-clock time bills Provisioned Memory and whose compute bills Active CPU.</div>
     </div>
@@ -274,7 +305,7 @@
   <div class="callout good">
     <svg width="18" height="18"><use href="#i-check"/></svg>
     <div><strong>Preview deployments are ruled out as a cost driver.</strong> The team ships 30&ndash;60 deployments/day across ~10 active branches,
-    but Vercel only bills builds when on-demand concurrency or enhanced/elastic build machines are enabled — standard preview builds are included.
+    but Vercel only bills builds when on-demand concurrency or enhanced/elastic build machines are enabled; standard preview builds are included.
     Even fully billed, this volume would be a small line item. The suspicion that previews explain the bill is disproven by the invoice itself:
     compute duration and request volume dominate.</div>
   </div>
@@ -283,18 +314,18 @@
     <svg width="18" height="18"><use href="#i-alert"/></svg>
     <div><strong>The verdict:</strong> the tracking widget generates ~160M function requests/month, and each request holds a ~2&nbsp;GB serverless
     instance open while it waits on database queries. Memory is billed on <em>wall-clock &times; instance size</em>, which is why Provisioned Memory
-    ($481 in two weeks) is 2.5&times; the Active CPU charge — the functions spend most of their billed life <em>idle, waiting on PlanetScale</em>.
-    Cross-check: 160M requests &times; ~1s average wall-clock &times; 2&nbsp;GB &asymp; 89,000 GB-hours/month &asymp; $940 — which matches the ~$960/month
+    ($481 in two weeks) is 2.5&times; the Active CPU charge: the functions spend most of their billed life <em>idle, waiting on PlanetScale</em>.
+    Cross-check: 160M requests &times; ~1s average wall-clock &times; 2&nbsp;GB &asymp; 89,000 GB-hours/month &asymp; $940, which matches the ~$960/month
     memory pace almost exactly.</div>
   </div>
 </section>
 
 <!-- ================================================================ -->
-<!-- SECTION 2 — COST DRIVERS                                          -->
+<!-- SECTION 2: COST DRIVERS                                           -->
 <!-- ================================================================ -->
 <section id="drivers">
   <div class="section-head">
-    <div class="kicker">Section 2 — Deep dive</div>
+    <div class="kicker">Section 2 · Deep dive</div>
     <h2><svg width="20" height="20"><use href="#i-search"/></svg>Why each driver costs so much</h2>
     <p class="lede">Each driver below was verified directly in the codebase and the Vercel project configuration.</p>
   </div>
@@ -307,12 +338,13 @@
     </div>
     <p style="color:var(--text-2); max-width:80ch;">
       The embedded widget fires a <code class="code-ref">POST /api/widgets/engagement</code> ping <strong>every 30 seconds for every
-      visible browser tab</strong> on every customer site (<code class="code-ref">pixel-generator.ts:2446</code> —
+      visible browser tab</strong> on every customer site (<code class="code-ref">pixel-generator.ts:2446</code>,
       <code class="code-ref">setInterval(sendHeartbeat, 30000)</code>). A 5-minute visit produces ~10 pings. The server handler
       (<code class="code-ref">src/app/api/widgets/engagement/route.ts</code>) runs 3 database lookups plus an update per ping, and returns a
-      JSON body the client <em>never reads</em> — it is pure fire-and-forget.
+      JSON body the client <em>never reads</em>; it is pure fire-and-forget.
     </p>
     <div class="viz" id="heartbeat-timeline" style="margin-top:18px;"></div>
+    <div class="viz-hint">hover a ping for detail · click the timeline to replay the session</div>
     <div class="math-chain">
       <div class="step"><span class="n">30s</span>ping interval per visible tab</div>
       <svg class="arrow" width="16" height="16"><use href="#i-arrow-right"/></svg>
@@ -335,15 +367,16 @@
     <p style="color:var(--text-2); max-width:80ch;">
       <code class="code-ref">src/app/api/widgets/pageview/route.ts</code> (2,643 lines, <code class="code-ref">maxDuration&nbsp;=&nbsp;60</code>)
       responds quickly, but then continues running heavy work inside Next.js <code class="code-ref">after()</code>. Vercel bills Provisioned Memory
-      for the <strong>entire time the instance is alive</strong> — including everything after the response is sent:
+      for the <strong>entire time the instance is alive</strong>, including everything after the response is sent:
     </p>
     <ul class="tight" style="margin-top:10px;">
-      <li><strong>Duplicate-contact sweep</strong> (<span class="mono">:813</span>) — finds and merges contacts created by concurrent handlers.</li>
-      <li><strong>Fingerprint session linking</strong> (<span class="mono">:277</span>) — matches anonymous sessions by IP / device / city / OS.</li>
-      <li><strong>Click-ID stitching</strong> (<span class="mono">:406</span>) — links sessions sharing the same gclid.</li>
-      <li><strong>Conversion re-attribution loop</strong> (<span class="mono">:531</span>) — re-runs the AttributionEngine <em>per conversion row</em> from the last 30 minutes; the single most expensive block.</li>
+      <li><strong>Duplicate-contact sweep</strong> (<span class="mono">:813</span>): finds and merges contacts created by concurrent handlers.</li>
+      <li><strong>Fingerprint session linking</strong> (<span class="mono">:277</span>): matches anonymous sessions by IP / device / city / OS.</li>
+      <li><strong>Click-ID stitching</strong> (<span class="mono">:406</span>): links sessions sharing the same gclid.</li>
+      <li><strong>Conversion re-attribution loop</strong> (<span class="mono">:531</span>): re-runs the AttributionEngine <em>per conversion row</em> from the last 30 minutes; the single most expensive block.</li>
     </ul>
     <div class="viz" id="afterwork-chart" style="margin-top:18px;"></div>
+    <div class="viz-hint">hover a segment for its share of the billed wall-clock</div>
   </div>
 
   <!-- ---- Driver 3: script serving ---- -->
@@ -368,47 +401,25 @@
       <span class="cost">small $ (~$20&ndash;60/mo) but free to fix</span>
     </div>
     <p style="color:var(--text-2); max-width:80ch;">
-      <code class="code-ref">vercel.json</code> defines exactly 100 cron jobs — 2 run <strong>every minute</strong>, 23 run <strong>every
+      <code class="code-ref">vercel.json</code> defines exactly 100 cron jobs: 2 run <strong>every minute</strong>, 23 run <strong>every
       5 minutes</strong>, and 25 route patterns are granted an 800-second maxDuration. That is roughly <strong>12,000 function invocations per
       day</strong> from schedules alone. In dollar terms this is a minor driver, because most jobs early-exit in under a second when there is no
-      work — but every run also queries PlanetScale, so slowing them is a free win for database load (a stated priority for this stack) as well
+      work. But every run also queries PlanetScale, so slowing them is a free win for database load (a stated priority for this stack) as well
       as a small Vercel saving.
     </p>
     <div class="viz" id="cron-chart" style="margin-top:18px;"></div>
-  </div>
-
-  <!-- ---- Driver 5: unaudited remainder ---- -->
-  <div class="card driver">
-    <div class="driver-head">
-      <h3><svg width="17" height="17"><use href="#i-help"/></svg>5. The unaudited remainder <span class="badge estimated"><svg><use href="#i-info"/></svg>needs a dashboard check</span></h3>
-      <span class="cost">~$300&ndash;400/mo gap</span>
-    </div>
-    <p style="color:var(--text-2); max-width:80ch;">
-      The three verified line items extrapolate to ~$1,625/month, leaving roughly $300&ndash;400 unaccounted for against the ~$2,000 total.
-      Likely composition, in order of probability given this traffic profile:
-    </p>
-    <ul class="tight" style="margin-top:10px;">
-      <li><strong>Observability Plus</strong> — $1.20 per million events. At 160M+ requests/month this alone could be $150&ndash;200+ if enabled without sampling.</li>
-      <li><strong>Team seats</strong> — $20 per member; the repo shows at least 3&ndash;4 active committers.</li>
-      <li><strong>Fast Data Transfer</strong> — response bytes across 160M requests.</li>
-      <li><strong>Web Analytics / Speed Insights / Log Drains</strong> — per-event add-ons if enabled.</li>
-      <li><strong>On-demand concurrent builds</strong> — only if enabled in Settings &rarr; Billing; at 30&ndash;60 builds/day it would be visible but modest.</li>
-    </ul>
-    <div class="callout info" style="margin-top:14px;">
-      <svg width="18" height="18"><use href="#i-info"/></svg>
-      <div>Action: open <strong>vercel.com/agent-kong/~/usage</strong> and Settings &rarr; Billing, and read every remaining line item. This requires no code and may surface $100&ndash;300/month of instantly switch-off-able cost (observability sampling, unused add-ons).</div>
-    </div>
+    <div class="viz-hint">hover a row for its share of daily cron invocations</div>
   </div>
 </section>
 
 <!-- ================================================================ -->
-<!-- SECTION 3 — SOLUTIONS & RISKS                                     -->
+<!-- SECTION 3: SOLUTIONS & RISKS                                      -->
 <!-- ================================================================ -->
 <section id="solutions">
   <div class="section-head">
-    <div class="kicker">Section 3 — The plan</div>
+    <div class="kicker">Section 3 · The plan</div>
     <h2><svg width="20" height="20"><use href="#i-wrench"/></svg>Solutions, effort, and risks</h2>
-    <p class="lede">Ordered by expected savings. Every solution lists what could go wrong and how to contain it — the tracking path carries
+    <p class="lede">Ordered by expected savings. Every solution lists what could go wrong and how to contain it: the tracking path carries
     customer revenue data, so nothing here ships without a canary and a rollback path.</p>
   </div>
 
@@ -436,9 +447,9 @@
       <div class="col risks">
         <h4><svg><use href="#i-alert"/></svg>Risks &amp; mitigations</h4>
         <ul>
-          <li><strong>Data loss on browser crash / OS tab kill:</strong> the final beacon never fires, so that session's last interval of engagement is lost. Mitigation: the 5-minute fallback flush caps the loss window; final values are what dashboards use, and <span class="mono">Math.max</span> merging means partial data is never corrupting — only slightly stale.</li>
-          <li><strong>This is the highest-traffic path — failures are not acceptable:</strong> the widget script propagates globally within ~5 minutes of deploy (5-min cache). Mitigation: ship behind a server-side flag in the generated script, canary on <em>one</em> pixel first, verify DB rows via PlanetScale, then ramp. Rollback = flip the flag; old behavior returns within 5 minutes.</li>
-          <li><strong>Granularity loss:</strong> intermediate 30s-resolution engagement snapshots stop existing. Verified: no dashboard or live-visitor feature consumes intermediate values today — but this forecloses building a real-time "active visitors" feature later without revisiting.</li>
+          <li><strong>Data loss on browser crash / OS tab kill:</strong> the final beacon never fires, so that session's last interval of engagement is lost. Mitigation: the 5-minute fallback flush caps the loss window; final values are what dashboards use, and <span class="mono">Math.max</span> merging means partial data is never corrupting, only slightly stale.</li>
+          <li><strong>This is the highest-traffic path and failures are not acceptable:</strong> the widget script propagates globally within ~5 minutes of deploy (5-min cache). Mitigation: ship behind a server-side flag in the generated script, canary on <em>one</em> pixel first, verify DB rows via PlanetScale, then ramp. Rollback = flip the flag; old behavior returns within 5 minutes.</li>
+          <li><strong>Granularity loss:</strong> intermediate 30s-resolution engagement snapshots stop existing. Verified: no dashboard or live-visitor feature consumes intermediate values today, but this forecloses building a real-time "active visitors" feature later without revisiting.</li>
           <li><strong>sendBeacon payload limits</strong> (~64KB): current payload is tiny; batching adds a few fields. No practical risk, but enforce a size guard.</li>
         </ul>
       </div>
@@ -461,7 +472,7 @@
         <h4><svg><use href="#i-wrench"/></svg>What changes</h4>
         <ul>
           <li>Replace the <span class="mono">after()</span> block (dedup sweep, fingerprint linking, gclid stitching, conversion re-attribution) with <strong>one QStash enqueue</strong>; a new worker route processes it in the background.</li>
-          <li>The QStash publish pattern already exists in this codebase (<span class="mono">contact.router.ts</span>, workers under <span class="mono">src/app/api/qstash/</span>) — copy it, don't invent it.</li>
+          <li>The QStash publish pattern already exists in this codebase (<span class="mono">contact.router.ts</span>, workers under <span class="mono">src/app/api/qstash/</span>): copy it, don't invent it.</li>
           <li>Pageview billed wall-clock drops from ~3&ndash;5s to ~0.5&ndash;1s per request.</li>
           <li>This also aligns with the repo's own performance rule: "defer stitching/enrichment to background jobs."</li>
         </ul>
@@ -492,7 +503,7 @@
       <div class="col">
         <h4><svg><use href="#i-wrench"/></svg>What changes</h4>
         <ul>
-          <li>Provisioned Memory bills per GB — halving instance size on the highest-volume routes roughly halves their memory line.</li>
+          <li>Provisioned Memory bills per GB, so halving instance size on the highest-volume routes roughly halves their memory line.</li>
           <li>Add <span class="mono">"memory": 1024</span> in the <span class="mono">vercel.json</span> functions block for <span class="mono">engagement</span>, <span class="mono">pageview</span>, <span class="mono">e</span>, <span class="mono">payment-link-click</span>, and the script route. Only one route has any memory override today.</li>
           <li>Verify the project's actual default in Settings &rarr; Functions first (dashboard-level setting is not visible in the repo).</li>
         </ul>
@@ -523,7 +534,7 @@
         <h4><svg><use href="#i-wrench"/></svg>What changes</h4>
         <ul>
           <li>Raise <span class="mono">s-maxage</span> from 300 to 3600 with <span class="mono">stale-while-revalidate</span> on <span class="mono">/api/widgets/[pixelCode]</span>.</li>
-          <li>Add an ETag derived from the deploy/script version; return <strong>304 Not Modified</strong> on match — skips DB check and regeneration.</li>
+          <li>Add an ETag derived from the deploy/script version; return <strong>304 Not Modified</strong> on match, which skips the DB check and regeneration.</li>
         </ul>
       </div>
       <div class="col risks">
@@ -551,7 +562,7 @@
       <p style="color:var(--text-2); font-size:13.5px; margin-bottom:14px;">
         Every job below was individually researched: each is either an internal queue that early-exits when idle, or a <strong>reconciliation
         safety-net</strong> for data that primarily arrives via webhooks, with a 45-minute lookback window that makes missed runs self-healing.
-        The main risk of slowing any reconciliation job is <strong>reduced freshness granularity</strong> — data that arrives only via polling
+        The main risk of slowing any reconciliation job is <strong>reduced freshness granularity</strong>: data that arrives only via polling
         shows up 5&ndash;10 minutes later on average in customer dashboards.
       </p>
       <table>
@@ -566,13 +577,13 @@
           <tr><td>tally / calendly / typeform reconcile (3 jobs)</td><td class="mono">5 min</td><td class="mono">10 min</td><td>Webhook-covered reconciliation</td><td><span class="risk-pill risk-low">low</span></td></tr>
           <tr><td>fathom-periodic-sync</td><td class="mono">5 min</td><td class="mono">10 min</td><td>Webhooks primary; per-business skip logic already present</td><td><span class="risk-pill risk-low">low</span></td></tr>
           <tr><td>meta-leadgen-reconcile</td><td class="mono">5 min</td><td class="mono">10 min</td><td>Webhook primary + hourly 48h deep-audit remains as backstop</td><td><span class="risk-pill risk-low">low</span></td></tr>
-          <tr><td>iclosed-poll</td><td class="mono">5 min</td><td class="mono">10 min</td><td><strong>Pure polling — this IS the primary path.</strong> Adds &le;5 min avg latency</td><td><span class="risk-pill risk-med">decision</span></td></tr>
-          <tr><td>salesforce-conversion-poll</td><td class="mono">5 min</td><td class="mono">10 min</td><td><strong>Pure polling — primary path.</strong> Adds &le;5 min avg dashboard latency</td><td><span class="risk-pill risk-med">decision</span></td></tr>
+          <tr><td>iclosed-poll</td><td class="mono">5 min</td><td class="mono">10 min</td><td><strong>Pure polling; this IS the primary path.</strong> Adds &le;5 min avg latency</td><td><span class="risk-pill risk-med">decision</span></td></tr>
+          <tr><td>salesforce-conversion-poll</td><td class="mono">5 min</td><td class="mono">10 min</td><td><strong>Pure polling; primary path.</strong> Adds &le;5 min avg dashboard latency</td><td><span class="risk-pill risk-med">decision</span></td></tr>
         </tbody>
       </table>
       <div class="callout warn" style="margin-top:16px;">
         <svg width="18" height="18"><use href="#i-shield"/></svg>
-        <div><strong>Deliberately left untouched</strong> (product-latency or safety sensitive — change only with explicit sign-off):
+        <div><strong>Deliberately left untouched</strong> (product-latency or safety sensitive; change only with explicit sign-off):
         <em>send-booking-notifications</em> (appointment reminders), <em>meta-capi-retry</em> (Meta attribution freshness),
         <em>follow-up</em> and <em>agent-pending-replies</em> (customer-facing reply latency), <em>process-pending-message-charges</em> (billing accuracy),
         <em>enforce-wallet-suspension</em> (security enforcement window), and all OAuth token-refresh jobs (auth expiry risk).</div>
@@ -584,7 +595,7 @@
   <div class="card solution">
     <div class="solution-head">
       <span class="num">6</span>
-      <h3>Invoice audit — no code required</h3>
+      <h3>Invoice review (no code required)</h3>
       <div class="solution-meta">
         <span class="meta-chip saving"><svg><use href="#i-dollar"/></svg>potentially $100&ndash;300/mo</span>
         <span class="meta-chip"><svg><use href="#i-effort"/></svg>30 minutes in the dashboard</span>
@@ -595,8 +606,8 @@
       <div class="col">
         <h4><svg><use href="#i-wrench"/></svg>What to check</h4>
         <ul>
-          <li>Read every remaining line item on the usage page (the ~$300&ndash;400/mo gap).</li>
-          <li>If <strong>Observability Plus</strong> is large: exclude/sample the widget routes — they generate the events but nobody debugs them per-request.</li>
+          <li>Walk the usage-page line items and confirm each cost is intentional; switch off anything nobody uses.</li>
+          <li>If <strong>Observability Plus</strong> is large: exclude/sample the widget routes; they generate the events but nobody debugs them per-request.</li>
           <li>Confirm whether <strong>on-demand concurrent builds</strong> or enhanced build machines are enabled; disable for previews if so.</li>
           <li>Review seats and per-project add-ons (Web Analytics, Speed Insights).</li>
         </ul>
@@ -605,7 +616,7 @@
         <h4><svg><use href="#i-alert"/></svg>Risks</h4>
         <ul>
           <li><strong>Observability sampling reduces debugging visibility</strong> on the sampled routes. Mitigation: keep full observability on webhook/conversion routes (money paths); sample only pageview/engagement.</li>
-          <li><strong>Disabling on-demand build concurrency</strong> means preview builds queue behind each other at peak commit hours — a developer-experience tradeoff, not a correctness one.</li>
+          <li><strong>Disabling on-demand build concurrency</strong> means preview builds queue behind each other at peak commit hours, a developer-experience tradeoff, not a correctness one.</li>
         </ul>
       </div>
     </div>
@@ -613,20 +624,20 @@
 </section>
 
 <!-- ================================================================ -->
-<!-- SECTION 4 — DECISIONS & PROJECTION                                -->
+<!-- SECTION 4: DECISIONS & PROJECTION                                 -->
 <!-- ================================================================ -->
 <section id="decisions">
   <div class="section-head">
-    <div class="kicker">Section 4 — Sign-off</div>
+    <div class="kicker">Section 4 · Sign-off</div>
     <h2><svg width="20" height="20"><use href="#i-git"/></svg>Decisions to make, and the projected outcome</h2>
   </div>
 
   <div class="chart-row" style="grid-template-columns: 6fr 5fr;">
     <div class="card chart-card">
       <h3>Projected monthly bill: before vs after <span class="badge estimated"><svg><use href="#i-info"/></svg>estimated</span></h3>
-      <div class="caption">Assumes Solutions 1&ndash;5 shipped and a conservative outcome for the invoice audit. The "after" bars show the midpoint of each estimate range.</div>
+      <div class="caption">Assumes Solutions 1&ndash;5 shipped and a conservative outcome for the invoice review. The "after" bars show the midpoint of each estimate range. Hover a category for the savings math.</div>
       <div class="viz" id="projection-chart"></div>
-      <div class="footnote">Projected total: <strong>~$900&ndash;1,100/month</strong> (from ~$2,000) — a 45&ndash;55% reduction. The single biggest step is heartbeat batching.</div>
+      <div class="footnote">Projected total: <strong>~$900&ndash;1,100/month</strong> (from ~$2,000), a 45&ndash;55% reduction. The single biggest step is heartbeat batching.</div>
     </div>
     <div class="card">
       <h3 style="margin-bottom:10px;">Decision checklist</h3>
@@ -650,7 +661,7 @@
         <div class="q-icon"><svg width="15" height="15"><use href="#i-help"/></svg></div>
         <div>
           <h4>3. Accept +5 min average latency on iClosed &amp; Salesforce polling?</h4>
-          <p>These are pure-polling integrations — the cron IS the data path. Customers watching dashboards see data ~5 min later on average.</p>
+          <p>These are pure-polling integrations; the cron IS the data path. Customers watching dashboards see data ~5 min later on average.</p>
           <span class="rec"><svg width="13" height="13"><use href="#i-check"/></svg>Recommended: yes (10-min schedule)</span>
         </div>
       </div>
@@ -659,15 +670,15 @@
         <div>
           <h4>4. Touch any of the latency-sensitive crons?</h4>
           <p>Booking notifications, Meta CAPI retry, agent replies, billing charges, wallet suspension.</p>
-          <span class="rec"><svg width="13" height="13"><use href="#i-check"/></svg>Recommended: no — keep as-is</span>
+          <span class="rec"><svg width="13" height="13"><use href="#i-check"/></svg>Recommended: no, keep as-is</span>
         </div>
       </div>
       <div class="decision-item">
         <div class="q-icon"><svg width="15" height="15"><use href="#i-help"/></svg></div>
         <div>
-          <h4>5. Sample observability on widget routes (after audit confirms cost)?</h4>
+          <h4>5. Sample observability on widget routes?</h4>
           <p>Keep full events on webhook/conversion money paths.</p>
-          <span class="rec"><svg width="13" height="13"><use href="#i-check"/></svg>Recommended: yes, if the audit shows &gt;$50/mo</span>
+          <span class="rec"><svg width="13" height="13"><use href="#i-check"/></svg>Recommended: yes, if it exceeds $50/mo</span>
         </div>
       </div>
       <div class="decision-item">
@@ -691,7 +702,7 @@
       <li><strong>Verified</strong> facts come from: the Vercel usage dashboard (line-item dollars, read by the team), the Vercel API via MCP (projects, domains, deployment volume), and direct code inspection (heartbeat interval, cron schedules, function config, route handlers).</li>
       <li>The billing figures ($481.25 memory, $189.28 active CPU, $141.69 edge requests) cover approximately the first two weeks of the current cycle; monthly figures are a 2&times; linear extrapolation and assume steady traffic.</li>
       <li>Request volume (~160M/mo) is derived from the edge-request charge: $141.69 &divide; $2 per million &asymp; 71M billable + 10M plan-included over ~2 weeks, doubled.</li>
-      <li>The request-mix split (heartbeats vs pageviews vs script fetches) is modeled from widget behavior (~10 heartbeats per ~5-minute session, 1 pageview + 1&ndash;2 script fetches per session) — it is an estimate, not a measurement. Vercel's per-path Observability view can confirm it precisely.</li>
+      <li>The request-mix split (heartbeats vs pageviews vs script fetches) is modeled from widget behavior (~10 heartbeats per ~5-minute session, 1 pageview + 1&ndash;2 script fetches per session); it is an estimate, not a measurement. Vercel's per-path Observability view can confirm it precisely.</li>
       <li>Average function wall-clock (~1s) is inferred from the memory-to-request ratio; per-route timings should be confirmed in Vercel Observability before and after each change.</li>
       <li>Savings ranges are midpoint estimates; the before/after chart shows midpoints of those ranges. All prices are Vercel Pro list prices as of June 2026 (memory $0.0106/GB-hr, active CPU ~$0.128/hr, edge requests $2/M, builds $0.0035/CPU-min).</li>
       <li>Cron risk assessments are based on per-job code review: webhook coverage, lookback windows, and early-exit behavior were checked individually in the route handlers.</li>
@@ -701,7 +712,7 @@
 
 <script>
 /* ================================================================
-   DATA — all figures hardcoded; sources: Vercel invoice (2-week
+   DATA: all figures hardcoded; sources: Vercel invoice (2-week
    actuals), Vercel MCP, direct code inspection. See footer notes.
    ================================================================ */
 const DATA = {
@@ -710,7 +721,7 @@ const DATA = {
     { label: "Fluid Provisioned Memory", value: 962, verified2wk: 481.25, color: "#2f5cff" },
     { label: "Fluid Active CPU",         value: 379, verified2wk: 189.28, color: "#7c9aff" },
     { label: "Edge Requests",            value: 283, verified2wk: 141.69, color: "#b3c4ff" },
-    { label: "Other / unaudited",        value: 376, verified2wk: null,   color: "#d8dde8" }
+    { label: "Other line items",         value: 376, verified2wk: null,   color: "#d8dde8" }
   ],
   // Estimated monthly request mix (of ~160M)
   requestMix: [
@@ -748,11 +759,12 @@ const DATA = {
     { label: "Provisioned Memory", before: 962, after: 330 },
     { label: "Active CPU",         before: 379, after: 190 },
     { label: "Edge Requests",      before: 283, after: 30 },
-    { label: "Other / unaudited",  before: 376, after: 280 }
+    { label: "Other line items",   before: 376, after: 280 }
   ]
 };
 
 const fmt$ = v => "$" + d3.format(",")(Math.round(v));
+const fmtPct = v => Math.round(v * 100) + "%";
 
 /* ---------- responsive svg helper ---------- */
 function makeSvg(sel, w, h) {
@@ -761,81 +773,191 @@ function makeSvg(sel, w, h) {
     .attr("preserveAspectRatio", "xMidYMid meet");
 }
 
+/* ---------- shared tooltip ---------- */
+const tip = (() => {
+  const el = document.createElement("div");
+  el.id = "chart-tip";
+  document.body.appendChild(el);
+  function place(ev) {
+    const pad = 14, r = el.getBoundingClientRect();
+    let x = ev.clientX + pad, y = ev.clientY + pad;
+    if (x + r.width > window.innerWidth - 8) x = ev.clientX - r.width - pad;
+    if (y + r.height > window.innerHeight - 8) y = ev.clientY - r.height - pad;
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+  }
+  return {
+    show(ev, html) { el.innerHTML = html; el.classList.add("on"); place(ev); },
+    move(ev) { place(ev); },
+    hide() { el.classList.remove("on"); }
+  };
+})();
+
+function tipHtml(title, rows, note) {
+  let h = `<div class="tip-title">${title}</div>`;
+  (rows || []).forEach(([k, v]) => h += `<div class="tip-row"><span>${k}</span><span class="v">${v}</span></div>`);
+  if (note) h += `<div class="tip-note">${note}</div>`;
+  return h;
+}
+
+/* ---------- animate charts when they scroll into view ---------- */
+const animators = new Map();
+function onVisible(sel, fn) {
+  const el = document.querySelector(sel);
+  if (el) animators.set(el, fn);
+}
+const io = ("IntersectionObserver" in window)
+  ? new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting && animators.has(e.target)) {
+          animators.get(e.target)();
+          animators.delete(e.target);
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.35 })
+  : null;
+
 /* ================================================================
-   1. DONUT — cost breakdown
+   1. DONUT: cost breakdown (hover segments/legend, animated sweep)
    ================================================================ */
 (function donut() {
-  const W = 500, H = 260, R = 100;
+  const W = 500, H = 260, R = 96;
   const svg = makeSvg("#donut-chart", W, H);
   const g = svg.append("g").attr("transform", `translate(${H/2 - 10},${H/2})`);
   const pie = d3.pie().value(d => d.value).sort(null).padAngle(0.012);
   const arc = d3.arc().innerRadius(R * 0.62).outerRadius(R);
+  const arcHover = d3.arc().innerRadius(R * 0.60).outerRadius(R + 7);
   const total = d3.sum(DATA.costBreakdown, d => d.value);
+  const arcs = pie(DATA.costBreakdown);
 
-  g.selectAll("path").data(pie(DATA.costBreakdown)).join("path")
-    .attr("d", arc)
+  const paths = g.selectAll("path").data(arcs).join("path")
+    .attr("class", "hit")
+    .attr("d", d => arc({ ...d, endAngle: d.startAngle }))
     .attr("fill", d => d.data.color)
     .attr("stroke", "#fff").attr("stroke-width", 1.5);
 
-  g.append("text").attr("text-anchor", "middle").attr("dy", "-0.25em")
-    .style("font-size", "24px").style("font-weight", "700").text(fmt$(total));
-  g.append("text").attr("text-anchor", "middle").attr("dy", "1.25em")
+  const centerN = g.append("text").attr("text-anchor", "middle").attr("dy", "-0.25em")
+    .style("font-size", "24px").style("font-weight", "700").text(fmt$(0));
+  const centerL = g.append("text").attr("text-anchor", "middle").attr("dy", "1.25em")
     .style("font-size", "11.5px").style("fill", "#667085").text("est. / month");
 
-  // side legend with values
+  // side legend with values; hovering a row highlights its segment
   const leg = svg.append("g").attr("transform", `translate(${H + 5}, ${H/2 - DATA.costBreakdown.length*15})`);
+  const legRows = [];
   DATA.costBreakdown.forEach((d, i) => {
-    const row = leg.append("g").attr("transform", `translate(0, ${i * 32})`);
+    const row = leg.append("g").attr("class", "hit").attr("transform", `translate(0, ${i * 32})`);
+    row.append("rect").attr("x", -6).attr("y", -4).attr("width", W - H - 10).attr("height", 30)
+      .attr("rx", 6).attr("fill", "transparent");
     row.append("rect").attr("width", 10).attr("height", 10).attr("rx", 3).attr("y", 2).attr("fill", d.color);
     row.append("text").attr("x", 17).attr("y", 10).style("font-size", "12px").style("fill", "#101828").style("font-weight", "600")
-      .text(`${d.label} — ${fmt$(d.value)}`);
+      .text(`${d.label}: ${fmt$(d.value)}`);
     row.append("text").attr("x", 17).attr("y", 24).style("font-size", "10.5px").style("fill", "#667085")
-      .text(d.verified2wk != null ? `verified: $${d.verified2wk.toFixed(2)} in ~2 weeks` : "gap to ~$2,000 total; audit needed");
+      .text(d.verified2wk != null ? `verified: $${d.verified2wk.toFixed(2)} in ~2 weeks` : "base plan, seats, and add-ons");
+    legRows.push(row);
+  });
+
+  function segTip(d) {
+    const rows = [
+      ["Monthly run-rate", fmt$(d.data.value)],
+      ["Share of total", fmtPct(d.data.value / total)]
+    ];
+    if (d.data.verified2wk != null) rows.push(["Verified (~2 wk)", "$" + d.data.verified2wk.toFixed(2)]);
+    return tipHtml(d.data.label, rows,
+      d.data.verified2wk != null ? "monthly = 2× the verified 2-week actual" : "base plan, seats, and add-ons");
+  }
+
+  function focus(i) {
+    paths.transition().duration(140)
+      .attr("opacity", (p, j) => j === i ? 1 : 0.35)
+      .attr("d", (p, j) => j === i ? arcHover(p) : arc(p));
+    legRows.forEach((r, j) => r.attr("opacity", j === i ? 1 : 0.4));
+    const d = DATA.costBreakdown[i];
+    centerN.text(fmt$(d.value));
+    centerL.text(fmtPct(d.value / total) + " of monthly total");
+  }
+  function unfocus() {
+    paths.transition().duration(140).attr("opacity", 1).attr("d", p => arc(p));
+    legRows.forEach(r => r.attr("opacity", 1));
+    centerN.text(fmt$(total));
+    centerL.text("est. / month");
+  }
+
+  paths
+    .on("mouseenter", (ev, d) => { focus(arcs.indexOf(d)); tip.show(ev, segTip(d)); })
+    .on("mousemove", ev => tip.move(ev))
+    .on("mouseleave", () => { unfocus(); tip.hide(); });
+  legRows.forEach((row, i) => {
+    row.on("mouseenter", ev => { focus(i); tip.show(ev, segTip(arcs[i])); })
+       .on("mousemove", ev => tip.move(ev))
+       .on("mouseleave", () => { unfocus(); tip.hide(); });
+  });
+
+  onVisible("#donut-chart", () => {
+    paths.transition().duration(750).delay((d, i) => i * 110).ease(d3.easeCubicOut)
+      .attrTween("d", function(d) {
+        const ia = d3.interpolate(d.startAngle, d.endAngle);
+        return t => arc({ ...d, endAngle: ia(t) });
+      });
+    centerN.transition().duration(900).tween("text", function() {
+      const iv = d3.interpolate(0, total);
+      return t => d3.select(this).text(fmt$(iv(t)));
+    });
   });
 })();
 
 /* ================================================================
-   2. HORIZONTAL BAR — request mix
+   2. HORIZONTAL BAR: request mix (hover rows, animated widths)
    ================================================================ */
 (function requestBars() {
   const W = 520, rowH = 32, m = { l: 4, r: 60, t: 4 };
   const H = DATA.requestMix.length * rowH + m.t + 8;
   const svg = makeSvg("#request-chart", W, H);
   const max = d3.max(DATA.requestMix, d => d.value);
+  const total = d3.sum(DATA.requestMix, d => d.value);
   const x = d3.scaleLinear().domain([0, max]).range([0, W - m.l - m.r]);
 
   const g = svg.selectAll("g.row").data(DATA.requestMix).join("g")
-    .attr("class", "row")
+    .attr("class", "row hit")
     .attr("transform", (d, i) => `translate(${m.l}, ${m.t + i * rowH})`);
 
+  g.append("rect").attr("x", -m.l).attr("y", 0).attr("width", W).attr("height", rowH)
+    .attr("fill", "transparent");
   g.append("text").attr("y", 9).style("font-size", "11px").style("fill", "#475467").text(d => d.label);
-  g.append("rect").attr("y", 13).attr("height", 11).attr("rx", 3)
-    .attr("width", d => Math.max(2, x(d.value))).attr("fill", d => d.color);
-  g.append("text")
+  const bars = g.append("rect").attr("y", 13).attr("height", 11).attr("rx", 3)
+    .attr("width", 2).attr("fill", d => d.color);
+  const vals = g.append("text")
     .attr("x", d => x(d.value) + 7).attr("y", 22.5)
     .style("font-size", "11px").style("font-weight", "600").style("fill", "#101828")
+    .style("opacity", 0)
     .text(d => d.value >= 10 ? `~${Math.round(d.value)}M/mo` : `~${d.value}M/mo`);
+
+  g.on("mouseenter", function(ev, d) {
+      g.attr("opacity", r => r === d ? 1 : 0.4);
+      tip.show(ev, tipHtml(d.label, [
+        ["Requests / month", `~${d.value}M`],
+        ["Share of ~160M", fmtPct(d.value / total)]
+      ], "estimated mix, modeled from code behavior"));
+    })
+    .on("mousemove", ev => tip.move(ev))
+    .on("mouseleave", () => { g.attr("opacity", 1); tip.hide(); });
+
+  onVisible("#request-chart", () => {
+    bars.transition().duration(650).delay((d, i) => i * 70).ease(d3.easeCubicOut)
+      .attr("width", d => Math.max(2, x(d.value)));
+    vals.transition().duration(400).delay((d, i) => 350 + i * 70).style("opacity", 1);
+  });
 })();
 
 /* ================================================================
-   3. HEARTBEAT TIMELINE — current vs proposed session
+   3. HEARTBEAT TIMELINE: current vs proposed session
+      (hover pings, click to replay)
    ================================================================ */
 (function heartbeatTimeline() {
   const W = 960, H = 170, m = { l: 150, r: 40 };
   const svg = makeSvg("#heartbeat-timeline", W, H);
   const x = d3.scaleLinear().domain([0, 300]).range([m.l, W - m.r]); // 5-min session
-
-  function lane(y, title, subtitle, events, color) {
-    svg.append("text").attr("x", 0).attr("y", y + 4).style("font-size", "12.5px").style("font-weight", "600").text(title);
-    svg.append("text").attr("x", 0).attr("y", y + 20).style("font-size", "10.5px").style("fill", "#667085").text(subtitle);
-    svg.append("line").attr("x1", x(0)).attr("x2", x(300)).attr("y1", y).attr("y2", y)
-      .attr("stroke", "#e4e7ec").attr("stroke-width", 2);
-    events.forEach(e => {
-      svg.append("circle").attr("cx", x(e.t)).attr("cy", y).attr("r", 5.5).attr("fill", color).attr("stroke", "#fff").attr("stroke-width", 1.5);
-      if (e.label) svg.append("text").attr("x", x(e.t)).attr("y", y - 12).attr("text-anchor", "middle")
-        .style("font-size", "10px").style("fill", "#667085").text(e.label);
-    });
-  }
+  const fmtT = t => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
 
   // axis
   [0, 60, 120, 180, 240, 300].forEach(t => {
@@ -843,36 +965,103 @@ function makeSvg(sel, w, h) {
       .style("font-size", "10.5px").style("fill", "#98a2b3").text(t === 0 ? "0" : (t/60) + " min");
   });
 
-  const current = d3.range(30, 301, 30).map(t => ({ t }));
-  current[0].label = "1 request every 30s";
-  lane(45, "Today: 10 requests", "one 5-minute visit", current, "#f04438");
+  const lanes = [
+    {
+      y: 45, color: "#f04438", title: "Today: 10 requests", subtitle: "one 5-minute visit",
+      events: d3.range(30, 301, 30).map((t, i) => ({
+        t, label: i === 0 ? "1 request every 30s" : null,
+        tipTitle: `Heartbeat ping · ${fmtT(t)}`,
+        tipRows: [["Server work", "3 DB lookups + 1 update"], ["Response", "JSON, never read by client"]],
+        tipNote: "one of ~10 requests in this 5-minute visit"
+      }))
+    },
+    {
+      y: 110, color: "#12b76a", title: "Proposed: 1 request", subtitle: "accumulate locally, flush on exit",
+      events: [{
+        t: 300, label: "single sendBeacon on page exit",
+        tipTitle: `Batched flush · ${fmtT(300)}`,
+        tipRows: [["Trigger", "pagehide / tab-hidden"], ["Payload", "same shape, final Math.max values"]],
+        tipNote: "plus a 5-minute fallback flush for long-lived tabs"
+      }]
+    }
+  ];
 
-  lane(110, "Proposed: 1 request", "accumulate locally, flush on exit", [{ t: 300, label: "single sendBeacon on page exit" }], "#12b76a");
+  const dotSel = [];
+  lanes.forEach(lane => {
+    svg.append("text").attr("x", 0).attr("y", lane.y + 4).style("font-size", "12.5px").style("font-weight", "600").text(lane.title);
+    svg.append("text").attr("x", 0).attr("y", lane.y + 20).style("font-size", "10.5px").style("fill", "#667085").text(lane.subtitle);
+    svg.append("line").attr("x1", x(0)).attr("x2", x(300)).attr("y1", lane.y).attr("y2", lane.y)
+      .attr("stroke", "#e4e7ec").attr("stroke-width", 2);
+    lane.events.forEach(e => {
+      const dot = svg.append("circle").attr("class", "hit")
+        .attr("cx", x(e.t)).attr("cy", lane.y).attr("r", 0)
+        .attr("fill", lane.color).attr("stroke", "#fff").attr("stroke-width", 1.5);
+      dot.on("mouseenter", function(ev) {
+          d3.select(this).attr("r", 8);
+          tip.show(ev, tipHtml(e.tipTitle, e.tipRows, e.tipNote));
+        })
+        .on("mousemove", ev => tip.move(ev))
+        .on("mouseleave", function() { d3.select(this).attr("r", 5.5); tip.hide(); });
+      let labelEl = null;
+      if (e.label) labelEl = svg.append("text").attr("x", x(e.t)).attr("y", lane.y - 12).attr("text-anchor", "middle")
+        .style("font-size", "10px").style("fill", "#667085").style("opacity", 0).text(e.label);
+      dotSel.push({ dot, labelEl, t: e.t, lane });
+    });
+  });
+
+  function play() {
+    dotSel.forEach(({ dot, labelEl, t, lane }) => {
+      const delay = lane.y === 45 ? t * 4 : 900 + 300; // red pings sweep, green flush lands after
+      dot.interrupt().attr("r", 0)
+        .transition().delay(delay).duration(260).ease(d3.easeBackOut.overshoot(2)).attr("r", 5.5);
+      if (labelEl) labelEl.interrupt().style("opacity", 0)
+        .transition().delay(delay + 150).duration(300).style("opacity", 1);
+    });
+  }
+
+  svg.attr("class", "hit").on("click", play);
+  onVisible("#heartbeat-timeline", play);
 })();
 
 /* ================================================================
-   4. STACKED BAR — pageview billed wall-clock, before vs after
+   4. STACKED BAR: pageview billed wall-clock, before vs after
+      (hover segments, sequential build)
    ================================================================ */
 (function afterWorkChart() {
   const W = 960, H = 150, m = { l: 210, r: 130 };
   const svg = makeSvg("#afterwork-chart", W, H);
   const maxSecs = 4.2;
   const x = d3.scaleLinear().domain([0, maxSecs]).range([m.l, W - m.r]);
+  const segs = [];
 
   function bar(y, title, phases) {
     svg.append("text").attr("x", 0).attr("y", y + 15).style("font-size", "12.5px").style("font-weight", "600").text(title);
+    const total = d3.sum(phases, p => p.secs);
     let cursor = 0;
     phases.forEach(p => {
-      svg.append("rect")
-        .attr("x", x(cursor)).attr("y", y)
-        .attr("width", Math.max(2, x(cursor + p.secs) - x(cursor)))
+      const start = cursor;
+      const rect = svg.append("rect").attr("class", "hit")
+        .attr("x", x(start)).attr("y", y)
+        .attr("width", 0)
         .attr("height", 22).attr("rx", 3)
         .attr("fill", p.color);
+      rect.on("mouseenter", function(ev) {
+          svg.selectAll("rect.hit").attr("opacity", 0.35);
+          d3.select(this).attr("opacity", 1);
+          tip.show(ev, tipHtml(p.phase, [
+            ["Billed time", `~${p.secs}s`],
+            ["Share of this bar", fmtPct(p.secs / total)]
+          ], title));
+        })
+        .on("mousemove", ev => tip.move(ev))
+        .on("mouseleave", () => { svg.selectAll("rect.hit").attr("opacity", 1); tip.hide(); });
+      segs.push({ rect, start, secs: p.secs });
       cursor += p.secs;
     });
-    const total = d3.sum(phases, p => p.secs);
-    svg.append("text").attr("x", x(total) + 8).attr("y", y + 15)
-      .style("font-size", "12px").style("font-weight", "700").text(`~${total.toFixed(1)}s billed`);
+    const label = svg.append("text").attr("x", x(total) + 8).attr("y", y + 15)
+      .style("font-size", "12px").style("font-weight", "700").style("opacity", 0)
+      .text(`~${total.toFixed(1)}s billed`);
+    segs.push({ label });
   }
 
   bar(28, "Today (after() inline)", DATA.afterWork.before);
@@ -888,38 +1077,66 @@ function makeSvg(sel, w, h) {
     svg.append("rect").attr("x", lx).attr("y", 122).attr("width", 10).attr("height", 10).attr("rx", 3).attr("fill", d.c);
     svg.append("text").attr("x", lx + 16).attr("y", 131).style("font-size", "11px").style("fill", "#475467").text(d.l);
   });
+
+  onVisible("#afterwork-chart", () => {
+    segs.forEach(s => {
+      if (s.rect) s.rect.transition().duration(500).delay(s.start * 220).ease(d3.easeCubicOut)
+        .attr("width", Math.max(2, x(s.start + s.secs) - x(s.start)));
+      if (s.label) s.label.transition().duration(400).delay(850).style("opacity", 1);
+    });
+  });
 })();
 
 /* ================================================================
-   5. CRON DISTRIBUTION — jobs and runs/day
+   5. CRON DISTRIBUTION: jobs and runs/day (hover rows)
    ================================================================ */
 (function cronChart() {
   const W = 960, rowH = 30, m = { l: 110, r: 90, t: 24 };
   const H = DATA.cronDist.length * rowH + m.t + 6;
   const svg = makeSvg("#cron-chart", W, H);
   const max = d3.max(DATA.cronDist, d => d.runsPerDay);
+  const totalRuns = d3.sum(DATA.cronDist, d => d.runsPerDay);
+  const totalJobs = d3.sum(DATA.cronDist, d => d.jobs);
   const x = d3.scaleLinear().domain([0, max]).range([0, W - m.l - m.r]);
 
   svg.append("text").attr("x", m.l).attr("y", 12).style("font-size", "11px").style("fill", "#667085")
-    .text("Function invocations per day, by schedule bucket (bar) — job count on the left");
+    .text("Function invocations per day, by schedule bucket (bar) · job count on the left");
 
   const g = svg.selectAll("g.row").data(DATA.cronDist).join("g")
+    .attr("class", "hit")
     .attr("transform", (d, i) => `translate(0, ${m.t + i * rowH})`);
 
+  g.append("rect").attr("x", 0).attr("y", 0).attr("width", W).attr("height", rowH - 4)
+    .attr("fill", "transparent");
   g.append("text").attr("x", m.l - 10).attr("y", 15).attr("text-anchor", "end")
     .style("font-size", "12px").style("font-weight", "600").text(d => d.label);
-  g.append("text").attr("x", m.l - 10).attr("y", 15).attr("text-anchor", "end").attr("dy", "-14")
-    .style("font-size", "0px");
-  g.append("rect").attr("x", m.l).attr("y", 4).attr("height", 13).attr("rx", 3)
-    .attr("width", d => Math.max(2, x(d.runsPerDay)))
+  const bars = g.append("rect").attr("x", m.l).attr("y", 4).attr("height", 13).attr("rx", 3)
+    .attr("width", 2)
     .attr("fill", d => d.runsPerDay > 2000 ? "#f04438" : d.runsPerDay > 400 ? "#f79009" : "#98a2b3");
-  g.append("text").attr("x", d => m.l + x(d.runsPerDay) + 7).attr("y", 15)
-    .style("font-size", "11px").style("fill", "#475467")
+  const vals = g.append("text").attr("x", d => m.l + x(d.runsPerDay) + 7).attr("y", 15)
+    .style("font-size", "11px").style("fill", "#475467").style("opacity", 0)
     .text(d => `${d3.format(",")(d.runsPerDay)}/day · ${d.jobs} job${d.jobs > 1 ? "s" : ""}`);
+
+  g.on("mouseenter", function(ev, d) {
+      g.attr("opacity", r => r === d ? 1 : 0.4);
+      tip.show(ev, tipHtml(`Schedule bucket: ${d.label}`, [
+        ["Jobs", `${d.jobs} of ${totalJobs}`],
+        ["Invocations / day", d3.format(",")(d.runsPerDay)],
+        ["Share of daily runs", fmtPct(d.runsPerDay / totalRuns)]
+      ], "verified in vercel.json"));
+    })
+    .on("mousemove", ev => tip.move(ev))
+    .on("mouseleave", () => { g.attr("opacity", 1); tip.hide(); });
+
+  onVisible("#cron-chart", () => {
+    bars.transition().duration(600).delay((d, i) => i * 60).ease(d3.easeCubicOut)
+      .attr("width", d => Math.max(2, x(d.runsPerDay)));
+    vals.transition().duration(400).delay((d, i) => 300 + i * 60).style("opacity", 1);
+  });
 })();
 
 /* ================================================================
-   6. PROJECTION — grouped before/after bars
+   6. PROJECTION: grouped before/after bars (hover for savings math)
    ================================================================ */
 (function projectionChart() {
   const W = 520, H = 250, m = { l: 44, r: 10, t: 16, b: 58 };
@@ -937,19 +1154,23 @@ function makeSvg(sel, w, h) {
   });
 
   const grp = svg.selectAll("g.grp").data(DATA.projection).join("g")
+    .attr("class", "hit")
     .attr("transform", d => `translate(${x0(d.label)},0)`);
 
-  grp.append("rect").attr("x", x1("before")).attr("width", x1.bandwidth())
-    .attr("y", d => y(d.before)).attr("height", d => y(0) - y(d.before))
+  grp.append("rect").attr("x", -4).attr("y", m.t - 8).attr("width", x0.bandwidth() + 8).attr("height", H - m.t - 20)
+    .attr("fill", "transparent");
+
+  const beforeBars = grp.append("rect").attr("x", x1("before")).attr("width", x1.bandwidth())
+    .attr("y", y(0)).attr("height", 0)
     .attr("rx", 3).attr("fill", "#d0d5dd");
-  grp.append("rect").attr("x", x1("after")).attr("width", x1.bandwidth())
-    .attr("y", d => y(d.after)).attr("height", d => y(0) - y(d.after))
+  const afterBars = grp.append("rect").attr("x", x1("after")).attr("width", x1.bandwidth())
+    .attr("y", y(0)).attr("height", 0)
     .attr("rx", 3).attr("fill", "#2f5cff");
 
-  grp.append("text").attr("x", x1("before") + x1.bandwidth()/2).attr("y", d => y(d.before) - 5)
-    .attr("text-anchor", "middle").style("font-size", "10px").style("fill", "#667085").text(d => fmt$(d.before));
-  grp.append("text").attr("x", x1("after") + x1.bandwidth()/2).attr("y", d => y(d.after) - 5)
-    .attr("text-anchor", "middle").style("font-size", "10px").style("font-weight", "700").style("fill", "#2f5cff").text(d => fmt$(d.after));
+  const beforeVals = grp.append("text").attr("x", x1("before") + x1.bandwidth()/2).attr("y", d => y(d.before) - 5)
+    .attr("text-anchor", "middle").style("font-size", "10px").style("fill", "#667085").style("opacity", 0).text(d => fmt$(d.before));
+  const afterVals = grp.append("text").attr("x", x1("after") + x1.bandwidth()/2).attr("y", d => y(d.after) - 5)
+    .attr("text-anchor", "middle").style("font-size", "10px").style("font-weight", "700").style("fill", "#2f5cff").style("opacity", 0).text(d => fmt$(d.after));
 
   grp.append("text").attr("x", x0.bandwidth()/2).attr("y", H - m.b + 16).attr("text-anchor", "middle")
     .style("font-size", "10.5px").style("fill", "#475467")
@@ -959,13 +1180,40 @@ function makeSvg(sel, w, h) {
       if (words.length > 1) d3.select(this).append("tspan").attr("x", x0.bandwidth()/2).attr("dy", 12).text(words.slice(1).join(" "));
     });
 
+  grp.on("mouseenter", function(ev, d) {
+      grp.attr("opacity", r => r === d ? 1 : 0.4);
+      const saved = d.before - d.after;
+      tip.show(ev, tipHtml(d.label, [
+        ["Current run-rate", fmt$(d.before)],
+        ["Projected after plan", fmt$(d.after)],
+        ["Savings", `${fmt$(saved)} (${fmtPct(saved / d.before)})`]
+      ], "midpoint of the estimate range"));
+    })
+    .on("mousemove", ev => tip.move(ev))
+    .on("mouseleave", () => { grp.attr("opacity", 1); tip.hide(); });
+
   // legend
   const lx = m.l;
   svg.append("rect").attr("x", lx).attr("y", H - 14).attr("width", 10).attr("height", 10).attr("rx", 3).attr("fill", "#d0d5dd");
   svg.append("text").attr("x", lx + 16).attr("y", H - 5).style("font-size", "11px").style("fill", "#475467").text("current run-rate");
   svg.append("rect").attr("x", lx + 130).attr("y", H - 14).attr("width", 10).attr("height", 10).attr("rx", 3).attr("fill", "#2f5cff");
   svg.append("text").attr("x", lx + 146).attr("y", H - 5).style("font-size", "11px").style("fill", "#475467").text("projected after plan");
+
+  onVisible("#projection-chart", () => {
+    beforeBars.transition().duration(600).delay((d, i) => i * 90).ease(d3.easeCubicOut)
+      .attr("y", d => y(d.before)).attr("height", d => y(0) - y(d.before));
+    afterBars.transition().duration(600).delay((d, i) => 200 + i * 90).ease(d3.easeCubicOut)
+      .attr("y", d => y(d.after)).attr("height", d => y(0) - y(d.after));
+    beforeVals.transition().duration(350).delay((d, i) => 450 + i * 90).style("opacity", 1);
+    afterVals.transition().duration(350).delay((d, i) => 650 + i * 90).style("opacity", 1);
+  });
 })();
+
+/* start observing after all charts have registered */
+animators.forEach((fn, el) => {
+  if (io) io.observe(el);
+  else fn();
+});
 </script>
 </body>
 </html>
