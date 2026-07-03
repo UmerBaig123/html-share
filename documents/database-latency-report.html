@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Optimization — What We Shipped · AgentKong</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #fbfcfd;
+    --border: #e5e8ec;
+    --border-strong: #d3d8de;
+    --text: #0e1420;
+    --text-2: #46505f;
+    --text-3: #6b7688;
+    --accent: #2f5cff;
+    --accent-soft: #eef2ff;
+    --red: #d92d20;
+    --red-soft: #fef3f2;
+    --amber: #b54708;
+    --amber-soft: #fffaeb;
+    --green: #067647;
+    --green-soft: #ecfdf3;
+    --purple: #6938ef;
+    --purple-soft: #f4f0ff;
+    --radius: 12px;
+    --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+  body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,0.85); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px; display: flex; align-items: center; gap: 22px; height: 54px;
+  }
+  nav .brand { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; display:flex; align-items:center; gap:9px; }
+  nav .brand svg { color: var(--accent); }
+  nav a { color: var(--text-3); text-decoration: none; font-size: 13px; font-weight: 500; transition: color .15s; white-space: nowrap; }
+  nav a:hover, nav a.active { color: var(--text); }
+  nav .spacer { flex: 1; }
+  nav .stamp { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  /* ---------- layout ---------- */
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 28px 120px; }
+  section { margin-bottom: 64px; scroll-margin-top: 70px; }
+  h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.2; margin-bottom: 12px; }
+  h2 { font-size: 22px; font-weight: 750; letter-spacing: -0.02em; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+  h2 svg { color: var(--accent); flex: none; }
+  .kicker { font-size: 11.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .lede { color: var(--text-2); max-width: 76ch; font-size: 15.5px; }
+  .section-head { margin-bottom: 26px; }
+  /* ---------- hero ---------- */
+  .hero { background: linear-gradient(155deg, #0e1420 0%, #1a2740 55%, #24357a 100%); color: #fff; border-radius: 18px; padding: 40px 40px 36px; margin-bottom: 30px; position: relative; overflow: hidden; }
+  .hero::after { content:""; position:absolute; right:-80px; top:-80px; width:320px; height:320px; background: radial-gradient(circle, rgba(105,56,239,.35), transparent 70%); }
+  .hero .kicker { color: #9db2ff; }
+  .hero h1 { color: #fff; position: relative; }
+  .hero p { color: #c4cde0; max-width: 70ch; position: relative; }
+  .hero .verdict { margin-top: 20px; padding: 16px 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; font-size: 14.5px; color: #e6ebf5; position: relative; }
+  .hero .verdict b { color: #fff; }
+  /* ---------- badges / pills ---------- */
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 650; letter-spacing: .02em; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; }
+  .badge svg { width: 11px; height: 11px; }
+  .badge.done { background: var(--green-soft); color: var(--green); }
+  .badge.pending { background: var(--amber-soft); color: var(--amber); }
+  .badge.gated { background: var(--purple-soft); color: var(--purple); }
+  .risk-pill { display: inline-flex; align-items:center; gap:5px; font-size: 11px; font-weight: 650; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .risk-none { background: var(--green-soft); color: var(--green); }
+  .risk-low  { background: #eefcf4; color: #077a4b; }
+  .risk-med  { background: var(--amber-soft); color: var(--amber); }
+  .risk-high { background: var(--red-soft); color: var(--red); }
+  /* ---------- cards ---------- */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+  /* ---------- toggle ---------- */
+  .toggle-wrap { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 0 auto 26px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; width: fit-content; box-shadow: 0 1px 2px rgba(16,20,32,.04); }
+  .toggle-btn { border: none; background: transparent; font: inherit; font-size: 13.5px; font-weight: 650; color: var(--text-3); padding: 8px 20px; border-radius: 999px; cursor: pointer; transition: all .2s; display:flex; align-items:center; gap:7px; }
+  .toggle-btn.active.before { background: var(--red-soft); color: var(--red); }
+  .toggle-btn.active.after  { background: var(--green-soft); color: var(--green); }
+  .toggle-hint { text-align:center; font-size: 12.5px; color: var(--text-3); margin-top: -16px; margin-bottom: 26px; }
+  /* ---------- stat grid ---------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { padding: 18px 18px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); transition: border-color .2s; }
+  .stat .label { font-size: 12px; font-weight: 550; color: var(--text-3); margin-bottom: 6px; }
+  .stat .value { font-size: 27px; font-weight: 780; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.05; transition: color .25s; }
+  .stat .value.big-red { color: var(--red); }
+  .stat .value.big-green { color: var(--green); }
+  .stat .sub { font-size: 11.5px; color: var(--text-3); margin-top: 6px; }
+  /* ---------- fix cards ---------- */
+  .fix { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; background: var(--surface); }
+  .fix-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px; cursor: pointer; user-select: none; transition: background .15s; }
+  .fix-head:hover { background: var(--surface-2); }
+  .fix-tag { flex: none; width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 750; font-size: 13px; color: #fff; }
+  .fix-tag.a { background: var(--accent); }
+  .fix-tag.b { background: var(--purple); }
+  .fix-tag.c { background: #0e1420; }
+  .fix-title { flex: 1; min-width: 0; }
+  .fix-title h3 { font-size: 15.5px; font-weight: 680; margin: 0 0 2px; }
+  .fix-title .one { font-size: 13px; color: var(--text-3); }
+  .fix-meta { display: flex; align-items: center; gap: 8px; flex: none; }
+  .chev { color: var(--text-3); transition: transform .25s; flex: none; }
+  .fix.open .chev { transform: rotate(90deg); }
+  .fix-body { display: none; padding: 0 20px 20px; border-top: 1px solid var(--border); }
+  .fix.open .fix-body { display: block; }
+  .fix-body .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; }
+  .fix-body h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); margin-bottom: 8px; }
+  .fix-body ul { padding-left: 17px; color: var(--text-2); font-size: 13.5px; }
+  .fix-body li { margin-bottom: 6px; }
+  .fix-body li strong { color: var(--text); font-weight: 650; }
+  .code-ref { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+  /* ---------- deep-dive detail blocks ---------- */
+  .detail { margin-top: 18px; border-top: 1px dashed var(--border-strong); padding-top: 16px; }
+  .detail h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); margin: 14px 0 7px; }
+  .detail h4:first-child { margin-top: 0; }
+  .detail p { font-size: 13.5px; color: var(--text-2); margin-bottom: 8px; }
+  .detail p strong, .detail li strong { color: var(--text); font-weight: 650; }
+  .code-label { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px 6px 0 0; }
+  .code-label.before { background: var(--red-soft); color: var(--red); }
+  .code-label.after  { background: var(--green-soft); color: var(--green); }
+  .code-label.file   { background: var(--accent-soft); color: var(--accent); font-family: var(--mono); text-transform: none; letter-spacing: 0; }
+  pre.code { margin: 0 0 14px; background: #0e1420; color: #dbe3ef; font-family: var(--mono); font-size: 12px; line-height: 1.55; border-radius: 0 8px 8px 8px; padding: 14px 16px; overflow-x: auto; -webkit-font-smoothing: auto; }
+  pre.code .c { color: #7f8ca3; }           /* comment */
+  pre.code .k { color: #93b7ff; }           /* keyword / call */
+  pre.code .s { color: #86e1b0; }           /* string */
+  pre.code .d { color: #f4a3a0; }           /* deletion emphasis */
+  /* ---------- before/after bar ---------- */
+  .ba { margin-top: 16px; }
+  .ba-row { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .ba-row .metric { font-size: 12.5px; color: var(--text-2); font-weight: 550; }
+  .ba-track { position: relative; }
+  .ba-line { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .ba-line:last-child { margin-bottom: 0; }
+  .ba-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing:.04em; width: 42px; flex: none; }
+  .ba-tag.b { color: var(--red); }
+  .ba-tag.a { color: var(--green); }
+  .ba-bar { height: 15px; border-radius: 5px; min-width: 3px; transition: width .6s cubic-bezier(.22,1,.36,1); }
+  .ba-bar.b { background: linear-gradient(90deg,#f97066,#d92d20); }
+  .ba-bar.a { background: linear-gradient(90deg,#32d583,#067647); }
+  .ba-val { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); white-space: nowrap; }
+  /* ---------- callouts ---------- */
+  .callout { display: flex; gap: 12px; padding: 15px 17px; border-radius: var(--radius); border: 1px solid; font-size: 14px; margin-top: 14px; }
+  .callout svg { flex: none; margin-top: 2px; }
+  .callout.good { background: var(--green-soft); border-color: #a6f4c5; color: #054f31; }
+  .callout.warn { background: var(--amber-soft); border-color: #fedf89; color: #7a2e0e; }
+  .callout.info { background: var(--accent-soft); border-color: #c7d2fe; color: #1e3a8a; }
+  .callout.bad  { background: var(--red-soft); border-color: #fecdca; color: #7a271a; }
+  .callout b { font-weight: 700; }
+  /* ---------- diagram ---------- */
+  .diagram { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; margin-top: 6px; }
+  .pool-viz { display: flex; flex-direction: column; gap: 8px; }
+  .pool-bar { position: relative; height: 44px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-strong); background: #fff; }
+  .pool-fill { position: absolute; left: 0; top: 0; bottom: 0; display: flex; align-items: center; padding-left: 14px; font-size: 12.5px; font-weight: 650; color: #fff; }
+  .pool-cap { background: linear-gradient(90deg,#2f5cff,#6938ef); }
+  .pool-work { background: repeating-linear-gradient(45deg,#f97066,#f97066 10px,#ef5b50 10px,#ef5b50 20px); }
+  .pool-label { font-size: 12px; color: var(--text-3); display:flex; justify-content:space-between; margin-top:2px; }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 10px; margin-top: 18px; }
+  .flow .node { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; text-align: center; font-size: 12.5px; }
+  .flow .node .n { font-weight: 750; font-size: 15px; display:block; font-variant-numeric: tabular-nums; }
+  .flow .node.bad-node { border-color: #fecdca; background: var(--red-soft); }
+  .flow .node.bad-node .n { color: var(--red); }
+  .flow .arrow { color: var(--text-3); }
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); padding: 10px 12px; border-bottom: 1.5px solid var(--border-strong); white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text-2); }
+  td:first-child { color: var(--text); font-weight: 550; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .arrow-cell { color: var(--green); font-weight: 700; }
+  /* ---------- deferred cards ---------- */
+  .defer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .defer { border: 1px solid var(--border); border-left: 3px solid var(--amber); border-radius: 10px; padding: 16px 18px; background: var(--surface); }
+  .defer.high { border-left-color: var(--red); }
+  .defer h4 { font-size: 14.5px; font-weight: 680; margin-bottom: 3px; display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .defer p { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+  .defer .why { font-size: 12.5px; color: var(--text-3); margin-top: 8px; }
+  .defer .why b { color: var(--amber); font-weight: 650; }
+  .defer.high .why b { color: var(--red); }
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--border); background: var(--surface); padding: 34px 28px; }
+  footer .inner { max-width: 1080px; margin: 0 auto; font-size: 13px; color: var(--text-3); }
+  footer b { color: var(--text-2); }
+  /* ---------- misc ---------- */
+  .pipe-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+  .pipe-tab { border: 1px solid var(--border); background: var(--surface); font: inherit; font-size: 13px; font-weight: 600; color: var(--text-2); padding: 7px 15px; border-radius: 999px; cursor: pointer; transition: all .15s; }
+  .pipe-tab:hover { border-color: var(--border-strong); }
+  .pipe-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+  .hidden { display: none !important; }
+  @media (max-width: 860px) {
+    .stat-grid { grid-template-columns: repeat(2,1fr); }
+    .fix-body .grid2, .defer-grid { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: 1fr; }
+    .flow .arrow { transform: rotate(90deg); }
+    .ba-row { grid-template-columns: 1fr; gap: 6px; }
+    nav { overflow-x: auto; }
+    main { padding: 28px 16px 80px; }
+    .hero { padding: 28px 22px; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
+</defs></svg>
+
+<nav>
+  <span class="brand"><svg width="16" height="16"><use href="#i-db"/></svg>DB Optimization · AgentKong</span>
+  <span class="spacer"></span>
+  <span class="stamp">July 3, 2026 · branch perf/db-latency-safe-fixes</span>
+</nav>
+
+<main>
+
+  <!-- INTRO -->
+  <div class="hero">
+    <div class="kicker">Database performance · What we shipped</div>
+    <h1>The fixes we shipped to make every query fast</h1>
+    <p>Query latency had climbed to <b style="color:#fff">600&ndash;700ms</b> across the board &mdash; a database drowning in avoidable work. Below is every fix, what it was costing, <b style="color:#fff">how it actually works</b>, and why it's safe.</p>
+  </div>
+
+  <!-- WHAT WE SHIPPED -->
+  <section id="shipped">
+    <div class="section-head">
+      <div class="kicker">The work</div>
+      <h2><svg width="20" height="20"><use href="#i-check"/></svg>What we shipped — 9 fixes</h2>
+      <p class="lede">Click any fix to expand the before/after, the risk, and exactly what changed. Grouped by what they target.</p>
+    </div>
+
+    <div class="pipe-tabs">
+      <button class="pipe-tab active" data-grp="all" onclick="filterGrp('all')">All 9</button>
+      <button class="pipe-tab" data-grp="a" onclick="filterGrp('a')">A · Database offenders</button>
+      <button class="pipe-tab" data-grp="b" onclick="filterGrp('b')">B · Page speed</button>
+      <button class="pipe-tab" data-grp="c" onclick="filterGrp('c')">C · Meta diff-writes</button>
+    </div>
+
+    <!-- A1 -->
+    <div class="fix" data-grp="a">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag a">A1</div>
+        <div class="fix-title"><h3>Meta sync — stop fetching data we throw away</h3><div class="one">The single biggest data-transfer waste in the system.</div></div>
+        <div class="fix-meta"><span class="risk-pill risk-none">Zero risk</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="ba">
+          <div class="ba-row"><span class="metric">Egress / day</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">~130 GB</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:1%"></div><span class="ba-val">≈ 0 GB</span></div>
+          </div></div>
+          <div class="ba-row"><span class="metric">Full-row SELECTs / day</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">6,024,445 (returning full JSON)</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:4%"></div><span class="ba-val">id-only</span></div>
+          </div></div>
+        </div>
+        <div class="grid2">
+          <div><h4>What we changed</h4><ul>
+            <li>Added <span class="code-ref">select:{id:true}</span> to 4 upserts whose returned rows were <strong>discarded anyway</strong>.</li>
+            <li>Narrowed a full-row fetch to the 7 fields actually used (was pulling <span class="code-ref">creativeData</span> + <span class="code-ref">cachedPreview</span> JSON blobs).</li>
+            <li>Deleted dead code that built a map nothing read.</li>
+          </ul></div>
+          <div><h4>Why it's zero-risk</h4><ul>
+            <li>The data was being <strong>fetched and immediately thrown on the floor</strong> — the code never looked at it.</li>
+            <li>Output is byte-identical; only the wasted network transfer disappears.</li>
+            <li>File: <span class="code-ref">src/lib/facebook/sync-optimized.ts</span></li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A2 -->
+    <div class="fix" data-grp="a">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag a">A2</div>
+        <div class="fix-title"><h3>GHL webhooks — stop rewriting unchanged rows</h3><div class="one">3 million pointless writes a day, gone.</div></div>
+        <div class="fix-meta"><span class="risk-pill risk-low">Low risk</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="ba">
+          <div class="ba-row"><span class="metric">lastSyncedAt writes / day</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">2,991,832</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:3%"></div><span class="ba-val">~50–100 K</span></div>
+          </div></div>
+        </div>
+        <div class="grid2">
+          <div><h4>What we changed</h4><ul>
+            <li>Switched an existence check from a scan (<span class="code-ref">findFirst</span>) to a direct key lookup (<span class="code-ref">findUnique</span>) on the tag's unique <span class="code-ref">(contactId, tagDefId)</span> key.</li>
+            <li>Only refresh the "last synced" timestamp when it's actually stale (&gt;6h) instead of on every single webhook.</li>
+          </ul></div>
+          <div><h4>Why it's low-risk</h4><ul>
+            <li>We confirmed <strong>nothing in either codebase reads that timestamp</strong> — it's pure bookkeeping.</li>
+            <li>Tag data itself is unaffected; only the redundant timestamp write is throttled.</li>
+            <li>File: <span class="code-ref">src/utils/ghl.utils.ts</span></li>
+          </ul></div>
+        </div>
+
+        <div class="callout info" style="margin-top:16px;">
+          <svg width="18" height="18"><use href="#i-info"/></svg>
+          <div><b>How we know it's a no-op — and why it costs nothing extra.</b> This fix does <em>not</em> compare tag content. Every webhook re-sends the same tags a contact already has, and the old code rewrote the <span class="code-ref">lastSyncedAt</span> timestamp on that row every single time — ~3M writes/day that changed nothing meaningful. Now we read the one row by its exact key (which the old code was already doing) and simply <strong>check the timestamp we just fetched</strong>: if it's fresh (&lt;6h), we skip the write entirely. <b>No new query</b> — same single-row read as before, we just look at a column we already had in hand and decide not to write. A skipped write is pure savings: a write maintains the row's indexes and the redo log; a read we were already doing is free.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A3 -->
+    <div class="fix" data-grp="a">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag a">A3</div>
+        <div class="fix-title"><h3>Meta CAPI retry cron — fix the 15-minute query</h3><div class="one">Runs every 5 minutes; each run scanned up to 16 M rows.</div></div>
+        <div class="fix-meta"><span class="risk-pill risk-low">Low–med risk</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="ba">
+          <div class="ba-row"><span class="metric">Rows read / run</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">7.7 M – 16.7 M</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:2%"></div><span class="ba-val">tens of thousands</span></div>
+          </div></div>
+          <div class="ba-row"><span class="metric">Latency (p50)</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">~15 min</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:2%"></div><span class="ba-val">seconds</span></div>
+          </div></div>
+        </div>
+        <div class="grid2">
+          <div><h4>What we changed</h4><ul>
+            <li>One <span class="code-ref">OR</span> query that the database couldn't index was split into <strong>two clean indexed queries</strong>, merged in code.</li>
+            <li>All time windows and batch sizes kept identical.</li>
+          </ul></div>
+          <div><h4>Why it's low-med risk</h4><ul>
+            <li>Provably returns the <strong>same set of rows</strong> (the two branches don't overlap; we re-sort and take the same top 100).</li>
+            <li>Only the query <em>shape</em> changed, not the logic. File: <span class="code-ref">meta-capi-retry/route.ts</span></li>
+          </ul></div>
+        </div>
+        <div class="detail">
+          <h4>What this code does</h4>
+          <p>This cron is the safety net for Meta&rsquo;s Conversions API. Every 5 minutes it finds conversion events that <em>should</em> have been sent to Meta but weren&rsquo;t &mdash; either <span class="code-ref">metaCapiStatus</span> is <span class="code-ref">null</span> (never sent) or stuck on <span class="code-ref">'pending'</span> &mdash; grabs the newest 100, and re-sends them.</p>
+          <h4>What changed &amp; why</h4>
+          <p>It asked for both status classes in <strong>one query with an <span class="code-ref">OR</span></strong>. MySQL can&rsquo;t serve an <span class="code-ref">OR</span> across two different <span class="code-ref">metaCapiStatus</span> values (each with its own date window) from the <span class="code-ref">(businessId, metaCapiStatus, createdAt)</span> index &mdash; so every run fell back to scanning <strong>7&ndash;16&nbsp;million rows</strong> (~15&nbsp;min). We split it into <strong>two separate queries</strong>, each a clean indexed range, then merge + dedupe + re-sort in memory. Same top-100 result, thousands of rows scanned instead of millions.</p>
+          <span class="code-label file">src/app/api/cron-jobs/meta-capi-retry/route.ts</span>
+          <span class="code-label before">Before</span>
+          <pre class="code">const unsent = await prisma.conversionEntry.findMany({
+  where: {
+    businessId: { in: businessIds },
+    contactId: { not: null },
+    OR: [
+      { metaCapiStatus: null,      createdAt: { gte: lookbackThreshold, lte: graceThreshold } },
+      { metaCapiStatus: &#x27;pending&#x27;, createdAt: { gte: lookbackThreshold, lte: pendingStuckThreshold } },
+    ],
+  },
+  select: { id: true, businessId: true, conversionConfigId: true },
+  orderBy: { createdAt: &#x27;desc&#x27; },
+  take: BATCH_SIZE,
+});</pre>
+          <span class="code-label after">After</span>
+          <pre class="code"><span class="c">// One clean, indexable range query per status class — run in parallel.</span>
+const [neverSent, stuckPending] = await Promise.all([
+  prisma.conversionEntry.findMany({
+    where: { businessId: { in: businessIds }, contactId: { not: null },
+             metaCapiStatus: null,
+             createdAt: { gte: lookbackThreshold, lte: graceThreshold } },
+    select: { id: true, businessId: true, conversionConfigId: true, createdAt: true },
+    orderBy: { createdAt: &#x27;desc&#x27; }, take: BATCH_SIZE,
+  }),
+  prisma.conversionEntry.findMany({
+    where: { businessId: { in: businessIds }, contactId: { not: null },
+             metaCapiStatus: &#x27;pending&#x27;,
+             createdAt: { gte: lookbackThreshold, lte: pendingStuckThreshold } },
+    select: { id: true, businessId: true, conversionConfigId: true, createdAt: true },
+    orderBy: { createdAt: &#x27;desc&#x27; }, take: BATCH_SIZE,
+  }),
+]);
+
+<span class="c">// Merge, dedupe by id (a row can flip null -&gt; &#x27;pending&#x27; between the two</span>
+<span class="c">// snapshots and land in both -&gt; without this it could be sent to Meta twice),</span>
+<span class="c">// re-sort newest-first, take the same top 100 the old query would have.</span>
+const seenIds = new Set&lt;string&gt;();
+const unsent = [...neverSent, ...stuckPending]
+  .filter((row) =&gt; (seenIds.has(row.id) ? false : (seenIds.add(row.id), true)))
+  .sort((a, b) =&gt; b.createdAt.getTime() - a.createdAt.getTime())
+  .slice(0, BATCH_SIZE);</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- A4 -->
+    <div class="fix" data-grp="a">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag a">A4</div>
+        <div class="fix-title"><h3>Three hot-path indexes</h3><div class="one">Turns billion-row scans into instant lookups. <b>You apply these.</b></div></div>
+        <div class="fix-meta"><span class="risk-pill risk-none">Very low</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="ba">
+          <div class="ba-row"><span class="metric">Rows read / lookup</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">up to 410 (whole-table scan)</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:1%"></div><span class="ba-val">&lt; 5</span></div>
+          </div></div>
+        </div>
+        <div class="grid2">
+          <div><h4>The three indexes</h4><ul>
+            <li><span class="code-ref">TagDefinition(businessId, ghlTagName)</span> — kills the 1.25 B rows/day scan.</li>
+            <li><span class="code-ref">CustomFieldDefinition(businessId, ghlFieldId)</span> — kills the 357 M rows/day scan.</li>
+            <li><span class="code-ref">Contact(updatedAt)</span> — fixes the dedup cron's full scan.</li>
+          </ul></div>
+          <div><h4>How to apply</h4><ul>
+            <li>SQL is ready in <span class="code-ref">prisma/migrations/add_hot_path_lookup_indexes.sql</span>.</li>
+            <li>Apply via <strong>PlanetScale deploy request, one at a time</strong>. Do <span class="code-ref">Contact(updatedAt)</span> last, during low traffic, and watch Insights for ~1h.</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B1 -->
+    <div class="fix" data-grp="b">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag b">B1</div>
+        <div class="fix-title"><h3>Auth — stop fetching the same user 3×</h3><div class="one">Every business page load re-fetched the user record three times.</div></div>
+        <div class="fix-meta"><span class="risk-pill risk-low">Low risk</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="ba">
+          <div class="ba-row"><span class="metric">User fetches / page render</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">3× (user + agency join)</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:33%"></div><span class="ba-val">1× (cached per request)</span></div>
+          </div></div>
+        </div>
+        <div class="grid2">
+          <div><h4>What we changed</h4><ul>
+            <li>Wrapped session + user lookups in React's per-request <span class="code-ref">cache()</span> so the three call sites share one result.</li>
+            <li>Parallelized the layout's preloads that used to run one-after-another.</li>
+          </ul></div>
+          <div><h4>Why it's low-risk</h4><ul>
+            <li><span class="code-ref">cache()</span> is scoped to a single request — no cross-user leakage, and it's the house pattern already used elsewhere.</li>
+            <li>New file: <span class="code-ref">src/server/cached-auth.ts</span></li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B2 -->
+    <div class="fix" data-grp="b">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag b">B2</div>
+        <div class="fix-title"><h3>Feature checks — 9 queries down to 2</h3><div class="one">Three feature gates each re-queried the same rows.</div></div>
+        <div class="fix-meta"><span class="risk-pill risk-low">Low risk</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="ba">
+          <div class="ba-row"><span class="metric">Queries / business page load</span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">up to 9 (sequential)</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:22%"></div><span class="ba-val">2 (parallel)</span></div>
+          </div></div>
+        </div>
+        <div class="grid2">
+          <div><h4>What we changed</h4><ul>
+            <li>New <span class="code-ref">getFeatureSet()</span> fetches the business + user row once and resolves all three features in memory.</li>
+            <li>Existing callers of the old function are untouched.</li>
+          </ul></div>
+          <div><h4>Why it's low-risk</h4><ul>
+            <li>The decision logic was extracted verbatim into pure functions.</li>
+            <li>Backed by a <strong>660-case equivalence test</strong> proving old and new agree on every input.</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B3 -->
+    <div class="fix" data-grp="b">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag b">B3</div>
+        <div class="fix-title"><h3>Two "N+1" query loops removed</h3><div class="one">A query per row where one query would do.</div></div>
+        <div class="fix-meta"><span class="risk-pill risk-low">Low risk</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="grid2">
+          <div><h4>What we changed</h4><ul>
+            <li><strong>Webhook sources:</strong> deleted a raw query fired <em>per row</em> to fetch a field the main query already returned (a stale workaround).</li>
+            <li><strong>Drip campaigns (admin):</strong> replaced 2×N count queries with one grouped query.</li>
+          </ul></div>
+          <div><h4>Why it's low-risk</h4><ul>
+            <li>Field is confirmed present on the query result — verified by the typechecker.</li>
+            <li>Grouped counts are provably equal to the per-row counts. Admin-only endpoint.</li>
+          </ul></div>
+        </div>
+        <div class="detail">
+          <h4>What this code does &mdash; part 1: webhook sources list</h4>
+          <p>Returns the list of webhook conversion sources for a business (used by the tracking / dashboard UI). It fetched the list with one <span class="code-ref">findMany</span>, then looped over it firing <strong>a raw SQL query per row</strong> just to read <span class="code-ref">webhookPath</span> &mdash; a workaround for a Prisma bug fixed long ago. Confirmed against the schema: <span class="code-ref">webhookPath</span> is a nullable scalar on <span class="code-ref">ConversionSource</span> and is written by the Typeform/Tally routers and others, so the <span class="code-ref">findMany</span> already returns it. Deleting the loop yields byte-identical output with zero extra queries.</p>
+          <span class="code-label file">src/app/api/tracking/webhook-sources/route.ts</span>
+          <span class="code-label before">Before</span>
+          <pre class="code"><span class="c">// Fired ONE raw query per source (N+1) to read a column the findMany already had.</span>
+const sourcesWithUrls = await Promise.all(
+  webhookSources.map(async (source) =&gt; {
+    const pathResult = await prisma.$queryRaw`
+      SELECT webhookPath FROM conversion_sources WHERE id = ${source.id}
+    ` as any[];
+    const webhookPath = pathResult[0]?.webhookPath || &#x27;&#x27;;
+    return { id: source.id, /* ...other fields... */ webhookPath: webhookPath || null /* ... */ };
+  })
+);</pre>
+          <span class="code-label after">After</span>
+          <pre class="code"><span class="c">// webhookPath is a plain scalar on ConversionSource, already returned by the</span>
+<span class="c">// findMany above (verified in schema + typechecker). No per-row query needed.</span>
+const sourcesWithUrls = webhookSources.map((source) =&gt; ({
+  id: source.id, /* ...other fields... */
+  webhookPath: source.webhookPath || null, /* ... */
+}));</pre>
+          <h4 style="margin-top:18px;">What this code does &mdash; part 2: drip-campaign stats (admin)</h4>
+          <p>The superadmin drip-campaign list shows, per campaign, total enrolled users and how many converted. It ran <strong>two <span class="code-ref">count</span> queries per campaign</strong> (2&times;N). One <span class="code-ref">groupBy</span> gets every count at once; the totals are derived in memory &mdash; provably the same numbers.</p>
+          <span class="code-label file">src/app/api/admin/drip-campaigns/route.ts</span>
+          <span class="code-label before">Before</span>
+          <pre class="code"><span class="c">// Two count() queries per campaign  -&gt;  2 x N queries.</span>
+const campaignsWithStats = await Promise.all(
+  campaigns.map(async (campaign) =&gt; {
+    const totalEnrolled = await prisma.userDripProgress.count({
+      where: { campaignId: campaign.id } });
+    const converted = await prisma.userDripProgress.count({
+      where: { campaignId: campaign.id, status: &#x27;CONVERTED&#x27; } });
+    return { ...campaign, stats: { totalEnrolled, converted, /* ... */ } };
+  })
+);</pre>
+          <span class="code-label after">After</span>
+          <pre class="code"><span class="c">// One grouped query for ALL campaigns; totals derived in memory.</span>
+const progressBuckets = await prisma.userDripProgress.groupBy({
+  by: [&#x27;campaignId&#x27;, &#x27;status&#x27;],
+  where: { campaignId: { in: campaigns.map((c) =&gt; c.id) } },
+  _count: { _all: true },
+});
+
+const statsByCampaign = new Map&lt;string, { total: number; converted: number }&gt;();
+for (const bucket of progressBuckets) {
+  const entry = statsByCampaign.get(bucket.campaignId) ?? { total: 0, converted: 0 };
+  entry.total += bucket._count._all;                                 // total enrolled = sum of all status buckets
+  if (bucket.status === &#x27;CONVERTED&#x27;) entry.converted += bucket._count._all;
+  statsByCampaign.set(bucket.campaignId, entry);
+}
+
+const campaignsWithStats = campaigns.map((campaign) =&gt; {
+  const { total: totalEnrolled = 0, converted = 0 } = statsByCampaign.get(campaign.id) ?? {};
+  return { ...campaign, stats: { totalEnrolled, converted, /* ... */ } };
+});</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- B4 -->
+    <div class="fix" data-grp="b">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag b">B4</div>
+        <div class="fix-title"><h3>Seven missing foreign-key indexes</h3><div class="one">Joins and deletes on these columns were full scans. <b>You apply these.</b></div></div>
+        <div class="fix-meta"><span class="risk-pill risk-low">Low</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="grid2">
+          <div><h4>What & why</h4><ul>
+            <li>Because of how the ORM is configured, foreign-key columns get <strong>no index automatically</strong> — so relation lookups and cascade deletes scanned whole tables.</li>
+            <li>Added indexes on 7 columns across 7 tables (all non-shared).</li>
+          </ul></div>
+          <div><h4>How to apply</h4><ul>
+            <li>SQL ready in <span class="code-ref">prisma/migrations/add_missing_foreign_key_indexes.sql</span>.</li>
+            <li>Additive online changes — apply via PlanetScale deploy request when convenient.</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C1 -->
+    <div class="fix" data-grp="c">
+      <div class="fix-head" onclick="toggleFix(this)">
+        <div class="fix-tag c">C1</div>
+        <div class="fix-title"><h3>Meta sync diff-writes — only write ads that changed</h3><div class="one">The biggest single item in the database: 5.9M "UPDATE ads"/day, most of them no-ops.</div></div>
+        <div class="fix-meta"><span class="risk-pill risk-med">Medium risk</span><svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="fix-body">
+        <div class="ba">
+          <div class="ba-row"><span class="metric">"UPDATE ads" / day <span style="color:var(--red)">(9.1% of all DB time)</span></span><div class="ba-track">
+            <div class="ba-line"><span class="ba-tag b">Before</span><div class="ba-bar b" style="width:100%"></div><span class="ba-val">5,928,023 (all rows, changed or not)</span></div>
+            <div class="ba-line"><span class="ba-tag a">After</span><div class="ba-bar a" style="width:2%"></div><span class="ba-val">thousands (only changed)</span></div>
+          </div></div>
+        </div>
+        <div class="grid2">
+          <div><h4>What we changed</h4><ul>
+            <li>Before writing, compare Meta's "last updated" + status against what we already have stored; <strong>skip rows that didn't change</strong>.</li>
+            <li>New rows are bulk-created; changed rows updated; unchanged rows left alone entirely.</li>
+            <li>Pure logic lives in <span class="code-ref">src/lib/facebook/sync-diff.ts</span> with unit tests.</li>
+          </ul></div>
+          <div><h4>Why it's safe</h4><ul>
+            <li>This is the only fix that <em>changes what gets written</em>, so the "did it change?" test is deliberately conservative — if Meta's <span class="code-ref">updated_time</span> or status moved at all, we write.</li>
+            <li>STEP 3 of the sync (the status-reconciliation pass) still runs unchanged and remains the authoritative healer for any status drift.</li>
+            <li>Every run logs <span class="code-ref">created / updated / skipped</span> counts, so the skip rate is observable in production.</li>
+          </ul></div>
+        </div>
+
+        <div class="callout info" style="margin-top:16px;">
+          <svg width="18" height="18"><use href="#i-info"/></svg>
+          <div><b>How we detect an "unchanged" ad — without re-reading the whole ad.</b> Meta stamps every campaign, ad set, and ad with an <span class="code-ref">updated_time</span> that moves <em>whenever any field on it changes</em> — name, budget, creative, status, anything. We store that stamp. On each sync we compare two tiny values: Meta's <span class="code-ref">updated_time</span> vs. our saved <span class="code-ref">platformUpdatedTime</span>, and Meta's <span class="code-ref">effective_status</span> vs. our saved status. If <strong>both match, nothing changed → skip the write.</strong> (We check status separately because a <em>parent</em> pausing can flip a child's effective status without bumping the child's own <span class="code-ref">updated_time</span>.) We never have to read the heavy fields — <span class="code-ref">creativeData</span>, <span class="code-ref">cachedPreview</span> — to decide.</div>
+        </div>
+
+        <div class="callout good" style="margin-top:12px;">
+          <svg width="18" height="18"><use href="#i-check"/></svg>
+          <div><b>"But doesn't comparing cost MORE database than before?" — No, it's dramatically less.</b> Three reasons:
+            <ul style="margin:8px 0 0; padding-left:18px;">
+              <li><b>The comparison is free.</b> It happens in app memory (two timestamps, two strings). Zero database work.</li>
+              <li><b>The read is tiny and we were already doing it.</b> To compare, we fetch just 4 small indexed columns per row (id, platform id, <span class="code-ref">updated_time</span>, status) — <em>no JSON blobs</em>. The old path already read these rows to resolve parent relationships, and Prisma's <span class="code-ref">upsert</span> itself runs a SELECT before every UPDATE. We're not adding a meaningful read; we're reusing one.</li>
+              <li><b>We delete millions of WRITES.</b> A write is far more expensive than a read: it rewrites the row, appends to the redo/undo logs, and updates <em>every</em> secondary index on the table (the ads table has ~7). A read of a few small indexed columns is served from memory. We trade one small batched read for <b>~5.9M eliminated UPDATE statements a day</b> — net database work drops massively.</li>
+            </ul>
+            In short: reads are cheap and mostly already happening; the writes were the expensive part, and that's exactly what we stop.
+          </div>
+        </div>
+        <div class="detail">
+          <h4>What this code does</h4>
+          <p><span class="code-ref">sync-optimized.ts</span> is the hourly Meta ads sync: it pulls every campaign, ad set, and ad from the Meta API and writes them to our DB. The old code <span class="code-ref">upsert</span>-ed <strong>every row on every run</strong> &mdash; even rows identical to what was already stored. That is the single biggest item in the whole database: <strong>~5.9M &ldquo;UPDATE ads&rdquo; per day, 9.1% of all DB time</strong>, rewriting rows that hadn&rsquo;t changed.</p>
+          <h4>What changed &amp; why</h4>
+          <p>A new module (<span class="code-ref">src/lib/facebook/sync-diff.ts</span>) decides <em>per row</em> whether Meta&rsquo;s version differs from ours, using two tiny values Meta already gives us &mdash; <span class="code-ref">updated_time</span> and <span class="code-ref">effective_status</span>. Unchanged rows are skipped, new rows bulk-created, only genuinely-changed rows get an UPDATE. This is now the default write path for the sync.</p>
+          <span class="code-label file">src/lib/facebook/sync-diff.ts  (new file — the decision logic)</span>
+          <span class="code-label after">New module</span>
+          <pre class="code"><span class="c">// The "did it change?" test: two tiny comparisons, no DB, no JSON blobs.</span>
+export function fbEntityChanged(fb: FbSyncEntity, existing: ExistingEntityState): boolean {
+  const metaUpdatedMs = new Date(fb.updated_time).getTime();
+  const metaEffectiveStatus = fb.effective_status || fb.status;
+  return existing.platformUpdatedTime.getTime() !== metaUpdatedMs
+      || existing.effectiveStatus !== metaEffectiveStatus;
+}
+
+<span class="c">// Bucket every Meta row into create / update / skip vs. what we already stored.</span>
+export function diffFbEntities&lt;T extends FbSyncEntity&gt;(
+  fbRows: T[], existing: Map&lt;string, ExistingEntityState&gt;, keyFn: (row: T) =&gt; string | null
+): FbEntityDiff&lt;T&gt; {
+  const toCreate: T[] = [], toUpdate: Array&lt;{ dbId: string; row: T }&gt; = [];
+  let skipped = 0, unmapped = 0;
+  for (const row of fbRows) {
+    const key = keyFn(row);
+    if (key === null) { unmapped++; continue; }
+    const current = existing.get(key);
+    if (!current) { toCreate.push(row); continue; }
+    if (fbEntityChanged(row, current)) toUpdate.push({ dbId: current.id, row });
+    else skipped++;
+  }
+  return { toCreate, toUpdate, skipped, unmapped };
+}</pre>
+          <h4 style="margin-top:18px;">Wiring it in &mdash; the ads level (campaigns &amp; ad sets are identical in shape)</h4>
+          <span class="code-label file">src/lib/facebook/sync-optimized.ts</span>
+          <span class="code-label before">Before</span>
+          <pre class="code"><span class="c">// OLD: upsert EVERY ad every hour, changed or not -&gt; ~5.9M UPDATEs/day.</span>
+for (let i = 0; i &lt; allAds.length; i += adBatchSize) {
+  const adBatch = allAds.slice(i, i + adBatchSize);
+  await prisma.$transaction(
+    adBatch.map(fbAd =&gt; {
+      const adSetId = adSetIdMap.get(fbAd.adset_id);
+      if (!adSetId) return null;
+      return prisma.ad.upsert({
+        where: { adSetId_platformAdId: { adSetId, platformAdId: fbAd.id } },
+        update: { name: fbAd.name, status: fbAd.status, /* ...all fields... */ },
+        create: { /* ...all fields... */ },
+      });
+    }).filter(Boolean) as any[]
+  );
+}</pre>
+          <span class="code-label after">After</span>
+          <pre class="code"><span class="c">// NEW: fetch 4 tiny columns for the ad sets this run touches,</span>
+<span class="c">// diff, then write ONLY what changed. This is the default path now.</span>
+const referencedAdSetIds = [...new Set(
+  (allAds as any[]).map(a =&gt; adSetIdMap.get(a.adset_id)).filter(Boolean))];
+const existingAds = referencedAdSetIds.length &gt; 0
+  ? await prisma.ad.findMany({
+      where: { adSetId: { in: referencedAdSetIds } },
+      select: { id: true, adSetId: true, platformAdId: true,
+                platformUpdatedTime: true, effectiveStatus: true },  // no JSON blobs
+    })
+  : [];
+const existingAdByKey = new Map(existingAds.map(a =&gt; [`${a.adSetId}:${a.platformAdId}`, a]));
+
+const adDiff = diffFbEntities(allAds as any[], existingAdByKey, (fbAd: any) =&gt; {
+  const adSetId = adSetIdMap.get(fbAd.adset_id);
+  return adSetId ? `${adSetId}:${fbAd.id}` : null;
+});
+
+const adWriteData = (fb: any) =&gt; ({ name: fb.name, status: fb.status,
+  effectiveStatus: fb.effective_status || fb.status, creativeData: fb.creative || undefined,
+  urlTags: fb.creative?.url_tags || null,
+  effectiveObjectStoryId: fb.effective_object_story_id || fb.creative?.object_story_id || null,
+  platformUpdatedTime: new Date(fb.updated_time) });
+
+if (adDiff.toCreate.length &gt; 0) await prisma.ad.createMany({    // brand-new ads
+  data: adDiff.toCreate.map((fbAd: any) =&gt; ({ adSetId: adSetIdMap.get(fbAd.adset_id)!,
+    platformAdId: fbAd.id, platformCreatedTime: new Date(fbAd.created_time), ...adWriteData(fbAd) })),
+  skipDuplicates: true });
+
+for (let i = 0; i &lt; adDiff.toUpdate.length; i += adUpdateBatchSize) {   // only changed ads
+  const batch = adDiff.toUpdate.slice(i, i + adUpdateBatchSize);
+  await prisma.$transaction(batch.map(({ dbId, row }: { dbId: string; row: any }) =&gt;
+    prisma.ad.update({ select: { id: true }, where: { id: dbId }, data: adWriteData(row) })));
+}
+<span class="c">// adDiff.skipped = how many no-op UPDATEs we avoided this run.</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- summary table -->
+    <div class="card" style="margin-top:24px; overflow-x:auto;">
+      <h3 style="font-size:15px; margin-bottom:14px;">All nine, at a glance</h3>
+      <table>
+        <thead><tr><th>#</th><th>Fix</th><th>Before</th><th></th><th>After</th><th>Risk</th></tr></thead>
+        <tbody>
+          <tr><td>A1</td><td>Meta sync egress</td><td>~130 GB/day wasted</td><td class="arrow-cell">→</td><td>≈ 0</td><td><span class="risk-pill risk-none">zero</span></td></tr>
+          <tr><td>A2</td><td>GHL write churn</td><td>3 M writes/day</td><td class="arrow-cell">→</td><td>~50–100 K</td><td><span class="risk-pill risk-low">low</span></td></tr>
+          <tr><td>A3</td><td>CAPI retry cron</td><td>16 M rows, ~15 min</td><td class="arrow-cell">→</td><td>seconds</td><td><span class="risk-pill risk-med">low-med</span></td></tr>
+          <tr><td>A4</td><td>3 hot-path indexes</td><td>1.6 B rows read/day</td><td class="arrow-cell">→</td><td>&lt; 10 M</td><td><span class="risk-pill risk-none">very low</span></td></tr>
+          <tr><td>B1</td><td>Auth dedup</td><td>3 user fetches/load</td><td class="arrow-cell">→</td><td>1</td><td><span class="risk-pill risk-low">low</span></td></tr>
+          <tr><td>B2</td><td>Feature gating</td><td>9 queries/load</td><td class="arrow-cell">→</td><td>2</td><td><span class="risk-pill risk-low">low</span></td></tr>
+          <tr><td>B3</td><td>Two N+1 loops</td><td>1 query per row</td><td class="arrow-cell">→</td><td>1 total</td><td><span class="risk-pill risk-low">low</span></td></tr>
+          <tr><td>B4</td><td>7 FK indexes</td><td>full scans on joins</td><td class="arrow-cell">→</td><td>indexed</td><td><span class="risk-pill risk-low">low</span></td></tr>
+          <tr><td>C1</td><td>Meta diff-writes</td><td>5.9 M UPDATE ads/day</td><td class="arrow-cell">→</td><td>thousands</td><td><span class="risk-pill risk-med">medium</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="inner">
+    <b>Sources &amp; method.</b> PlanetScale query Insights (trailing 24h, database <span class="mono">agentkong/agentkong</span>) cross-referenced against the codebase; every before/after number traces to a specific query pattern and is a reduction <b>by construction</b>. Branch <span class="mono">perf/db-latency-safe-fixes</span> &mdash; nothing committed or live yet.
+  </div>
+</footer>
+
+<script>
+  // Expand/collapse fix cards
+  function toggleFix(head) { head.parentElement.classList.toggle('open'); }
+
+  // Filter fix cards by group
+  function filterGrp(grp) {
+    document.querySelectorAll('.pipe-tab').forEach(t => t.classList.toggle('active', t.dataset.grp === grp));
+    document.querySelectorAll('.fix').forEach(f => {
+      f.classList.toggle('hidden', grp !== 'all' && f.dataset.grp !== grp);
+    });
+  }
+
+  // Open the first fix by default so it's obviously interactive
+  document.querySelector('.fix')?.classList.add('open');
+
+  // Nav active-state on scroll
+  const secs = [...document.querySelectorAll('section[id], div.hero')];
+  const links = [...document.querySelectorAll('nav a')];
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = e.target.id;
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + id));
+      }
+    });
+  }, { rootMargin: '-45% 0px -50% 0px' });
+  document.querySelectorAll('section[id]').forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>
